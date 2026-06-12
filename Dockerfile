@@ -14,7 +14,10 @@ COPY Retell.js ./src/services/retell.js
 COPY Twilio.js ./src/services/twilio.js
 COPY Leads.js ./src/services/leads.js
 COPY FollowUp.js ./src/jobs/followUp.js
-COPY Index.html ./index.html
+COPY Index.html ./Index.html
+
+RUN ls -la /app/
+
 EXPOSE 3000
 
 CMD ["node", "src/index.js"]
