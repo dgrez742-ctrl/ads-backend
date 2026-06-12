@@ -1,139 +1,664 @@
-const cron = require('node-cron');
-const { getLeadsForFollowUp, getStalledLeads, getNurtureLeadsDue, updateLeadStatus, logActivity, getAttemptCount, moveToNurture, updateNurtureStep } = require('../services/leads');
-const { triggerRetellCall } = require('../services/retell');
-const { sendSMS, getSMSMessage } = require('../services/twilio');
-const supabase = require('../supabase');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BotCipher — Lead Management</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 
-// --------------------------------------------------------
-// FOLLOW UP JOB — runs every hour
-// Checks for leads that need next follow up action
-// --------------------------------------------------------
-async function runFollowUpJob() {
-  console.log('Running follow up job...');
+    :root {
+      --bg:        #0f0f0f;
+      --surface:   #161616;
+      --border:    #222222;
+      --text:      #e8e8e8;
+      --muted:     #666666;
+      --accent:    #c8a96e;
+      --new:       #3a3a3a;
+      --new-text:  #aaaaaa;
+      --attempted: #2a2d1a;
+      --attempted-text: #c8c46a;
+      --contacted: #1a2a2a;
+      --contacted-text: #6ac4c4;
+      --booked:    #1a2a1a;
+      --booked-text: #6ac47a;
+      --dead:      #2a1a1a;
+      --dead-text: #c46a6a;
+      --nurture:   #1a1a2a;
+      --nurture-text: #8a8ac4;
+    }
 
-  try {
-    const leads = await getLeadsForFollowUp();
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    for (const lead of leads) {
-      const attemptCount = await getAttemptCount(lead.id);
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
 
-      // Follow up sequence:
-      // Attempt 1 — already done (initial call on lead intake)
-      // Attempt 2 — call again next day
-      // Attempt 3 — call again day after
-      // Attempt 4 — final call + final SMS + final email
-      // After 4 attempts — move to nurture
+    .shell { display: flex; min-height: 100vh; }
 
-      if (attemptCount === 1) {
-        // Day 2 — call again
-        console.log(`Lead ${lead.id} — attempt 2`);
-        const result = await triggerRetellCall(lead, 2);
-        await logActivity(lead.id, 'call', result.success ? 'no_answer' : 'bounced', 'Day 2 follow up call');
+    .sidebar {
+      width: 220px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 0;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
 
-      } else if (attemptCount === 2) {
-        // Day 3 — call + SMS
-        console.log(`Lead ${lead.id} — attempt 3`);
-        const result = await triggerRetellCall(lead, 3);
-        await logActivity(lead.id, 'call', result.success ? 'no_answer' : 'bounced', 'Day 3 follow up call');
+    .logo {
+      padding: 0 20px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .logo span {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+    }
+    .logo small {
+      display: block;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+      letter-spacing: 0.04em;
+    }
 
-        const message = getSMSMessage(lead, 2);
-        const smsResult = await sendSMS(lead.phone, message);
-        await logActivity(lead.id, 'sms', smsResult.success ? 'sent' : 'bounced', message);
+    .nav-label {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0 20px 8px;
+    }
 
-      } else if (attemptCount === 3) {
-        // Day 4 — final call + final SMS
-        console.log(`Lead ${lead.id} — final attempt`);
-        const result = await triggerRetellCall(lead, 4);
-        await logActivity(lead.id, 'call', result.success ? 'no_answer' : 'bounced', 'Final follow up call');
+    .client-list { flex: 1; overflow-y: auto; }
 
-        const message = getSMSMessage(lead, 3);
-        const smsResult = await sendSMS(lead.phone, message);
-        await logActivity(lead.id, 'sms', smsResult.success ? 'sent' : 'bounced', message);
+    .client-item {
+      padding: 10px 20px;
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .client-item:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+    .client-item.active {
+      color: var(--text);
+      border-left-color: var(--accent);
+      background: rgba(200,169,110,0.06);
+    }
+    .client-item .client-name { font-weight: 500; }
+    .client-item .client-meta { font-size: 11px; color: var(--muted); margin-top: 1px; }
 
-      } else if (attemptCount >= 4) {
-        // Exhausted — move to nurture
-        console.log(`Lead ${lead.id} — moving to nurture`);
-        await moveToNurture(lead.id);
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    .topbar {
+      padding: 20px 28px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .topbar h1 { font-size: 16px; font-weight: 500; }
+    .topbar .subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .topbar-right { display: flex; gap: 10px; align-items: center; }
+
+    .btn {
+      padding: 7px 14px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      transition: all 0.15s;
+      font-family: 'Inter', sans-serif;
+    }
+    .btn:hover { color: var(--text); border-color: #444; }
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0f0f0f;
+      font-weight: 600;
+    }
+    .btn.primary:hover { opacity: 0.9; }
+
+    .stats {
+      display: flex;
+      gap: 1px;
+      background: var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .stat { flex: 1; background: var(--surface); padding: 16px 20px; }
+    .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .stat-label { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+    .filters {
+      padding: 14px 28px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .filter-btn {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      transition: all 0.15s;
+      font-family: 'Inter', sans-serif;
+    }
+    .filter-btn:hover { color: var(--text); }
+    .filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(200,169,110,0.08); }
+
+    .table-wrap { flex: 1; overflow-y: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 10px 28px;
+      text-align: left;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+    }
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+      cursor: pointer;
+    }
+    tbody tr:hover { background: rgba(255,255,255,0.025); }
+    tbody td { padding: 13px 28px; font-size: 13px; }
+
+    .lead-name { font-weight: 500; color: var(--text); }
+    .lead-phone { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+    .lead-offer { color: var(--muted); font-size: 12px; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lead-time { font-size: 12px; color: var(--muted); }
+    .lead-attempts { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .badge.new       { background: var(--new);       color: var(--new-text); }
+    .badge.attempted { background: var(--attempted);  color: var(--attempted-text); }
+    .badge.contacted { background: var(--contacted);  color: var(--contacted-text); }
+    .badge.booked    { background: var(--booked);     color: var(--booked-text); }
+    .badge.dead      { background: var(--dead);       color: var(--dead-text); }
+    .badge.nurture   { background: var(--nurture);    color: var(--nurture-text); }
+
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      width: 520px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .modal-header h2 { font-size: 15px; font-weight: 500; }
+    .modal-close {
+      background: none; border: none; color: var(--muted);
+      cursor: pointer; font-size: 18px; line-height: 1;
+      padding: 0; transition: color 0.15s;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 20px 24px; }
+
+    .field-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .field-row:last-child { border-bottom: none; }
+    .field-label { color: var(--muted); }
+    .field-value { font-weight: 500; text-align: right; }
+
+    .status-select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+    }
+
+    .activity-log { margin-top: 20px; }
+    .activity-log h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+    .activity-item {
+      display: flex;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-type {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+      min-width: 50px;
+      text-transform: uppercase;
+    }
+    .activity-outcome { color: var(--muted); }
+    .activity-time { color: var(--muted); margin-left: auto; }
+
+    .empty { padding: 80px 28px; text-align: center; color: var(--muted); }
+    .empty h3 { font-size: 15px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+    .empty p { font-size: 13px; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .form-group input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: 'Inter', sans-serif;
+      transition: border-color 0.15s;
+    }
+    .form-group input:focus { outline: none; border-color: var(--accent); }
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="logo">
+      <span>BOTCIPHER</span>
+      <small>Lead Management</small>
+    </div>
+    <div class="nav-label">Clients</div>
+    <div class="client-list" id="clientList"></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h1 id="clientName">Select a client</h1>
+        <div class="subtitle" id="clientNiche">—</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn" onclick="openAddClient()">+ Add Client</button>
+        <button class="btn primary" onclick="openInjectLead()">Inject Test Lead</button>
+      </div>
+    </div>
+
+    <div class="stats" id="statsRow">
+      <div class="stat"><div class="stat-value" id="statTotal">—</div><div class="stat-label">Total Leads</div></div>
+      <div class="stat"><div class="stat-value" id="statNew">—</div><div class="stat-label">New</div></div>
+      <div class="stat"><div class="stat-value" id="statAttempted">—</div><div class="stat-label">Attempted</div></div>
+      <div class="stat"><div class="stat-value" id="statBooked">—</div><div class="stat-label">Booked</div></div>
+      <div class="stat"><div class="stat-value" id="statDead">—</div><div class="stat-label">Dead</div></div>
+      <div class="stat"><div class="stat-value" id="statNurture">—</div><div class="stat-label">Nurture</div></div>
+    </div>
+
+    <div class="filters">
+      <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+      <button class="filter-btn" onclick="setFilter('new', this)">New</button>
+      <button class="filter-btn" onclick="setFilter('attempted', this)">Attempted</button>
+      <button class="filter-btn" onclick="setFilter('contacted', this)">Contacted</button>
+      <button class="filter-btn" onclick="setFilter('booked', this)">Booked</button>
+      <button class="filter-btn" onclick="setFilter('nurture', this)">Nurture</button>
+      <button class="filter-btn" onclick="setFilter('dead', this)">Dead</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Offer Seen</th>
+            <th>Status</th>
+            <th>Attempts</th>
+            <th>Added</th>
+          </tr>
+        </thead>
+        <tbody id="leadsTable">
+          <tr><td colspan="6"><div class="empty"><h3>No client selected</h3><p>Choose a client from the sidebar to view their leads.</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<!-- LEAD DETAIL MODAL -->
+<div class="modal-overlay" id="leadModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2 id="modalLeadName">Lead</h2>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px" id="modalLeadId"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('leadModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-row"><span class="field-label">Phone</span><span class="field-value" id="modalPhone">—</span></div>
+      <div class="field-row"><span class="field-label">Email</span><span class="field-value" id="modalEmail">—</span></div>
+      <div class="field-row"><span class="field-label">Offer Seen</span><span class="field-value" id="modalOffer">—</span></div>
+      <div class="field-row"><span class="field-label">Added</span><span class="field-value" id="modalAdded">—</span></div>
+      <div class="field-row">
+        <span class="field-label">Status</span>
+        <select class="status-select" id="modalStatus" onchange="updateStatus()">
+          <option value="new">New</option>
+          <option value="attempted">Attempted</option>
+          <option value="contacted">Contacted</option>
+          <option value="booked">Booked</option>
+          <option value="dead">Dead</option>
+          <option value="nurture">Nurture</option>
+        </select>
+      </div>
+      <div class="activity-log">
+        <h3>Activity</h3>
+        <div id="activityList">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CLIENT MODAL -->
+<div class="modal-overlay" id="addClientModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Add Client</h2>
+      <button class="modal-close" onclick="closeModal('addClientModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Business Name</label><input id="newClientName" placeholder="e.g. Smith Roofing" /></div>
+      <div class="form-group"><label>Niche</label><input id="newClientNiche" placeholder="e.g. Roofing" /></div>
+      <div class="form-group"><label>Email</label><input id="newClientEmail" placeholder="client@email.com" /></div>
+      <div class="form-group"><label>Phone</label><input id="newClientPhone" placeholder="+1234567890" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('addClientModal')">Cancel</button>
+      <button class="btn primary" onclick="saveClient()">Save Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- INJECT TEST LEAD MODAL -->
+<div class="modal-overlay" id="injectModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Inject Test Lead</h2>
+      <button class="modal-close" onclick="closeModal('injectModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Name</label><input id="injectName" placeholder="John Smith" /></div>
+      <div class="form-group"><label>Phone</label><input id="injectPhone" placeholder="+1234567890" /></div>
+      <div class="form-group"><label>Email</label><input id="injectEmail" placeholder="john@example.com" /></div>
+      <div class="form-group"><label>Offer Seen</label><input id="injectOffer" placeholder="Free roofing inspection" /></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('injectModal')">Cancel</button>
+      <button class="btn primary" onclick="injectLead()">Inject Lead</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const BACKEND_URL = 'https://ads-backend-production-d450.up.railway.app';
+  const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+  let currentClientId = null;
+  let currentFilter = 'all';
+  let allLeads = [];
+  let currentLeadId = null;
+
+  async function sb(path, options = {}) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': options.prefer || 'return=representation',
+        ...options.headers,
+      },
+      ...options,
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json().catch(() => null);
+  }
+
+  async function loadClients() {
+    try {
+      const clients = await sb('ldm_clients?select=*&order=created_at.asc');
+      const list = document.getElementById('clientList');
+      list.innerHTML = '';
+      if (!clients || clients.length === 0) {
+        list.innerHTML = '<div style="padding:16px 20px;font-size:12px;color:var(--muted)">No clients yet.</div>';
+        return;
       }
-    }
-
-  } catch (err) {
-    console.error('Follow up job error:', err.message);
+      clients.forEach(c => {
+        const el = document.createElement('div');
+        el.className = 'client-item';
+        el.dataset.id = c.id;
+        el.innerHTML = `<div class="client-name">${c.business_name || c.name}</div><div class="client-meta">${c.niche || '—'}</div>`;
+        el.onclick = () => selectClient(c);
+        list.appendChild(el);
+      });
+    } catch (e) { console.error('Failed to load clients', e); }
   }
-}
 
-// --------------------------------------------------------
-// STALLED LEADS JOB — runs every 30 mins
-// Catches leads stuck in 'new' status (Retell outcome missed)
-// --------------------------------------------------------
-async function runStalledLeadsJob() {
-  console.log('Checking for stalled leads...');
-
-  try {
-    const stalledLeads = await getStalledLeads();
-
-    for (const lead of stalledLeads) {
-      console.warn(`Stalled lead detected: ${lead.id} — retrying call`);
-      await updateLeadStatus(lead.id, 'attempted');
-      const result = await triggerRetellCall(lead, 1);
-      await logActivity(lead.id, 'call', result.success ? 'no_answer' : 'bounced', 'Stalled lead retry');
-    }
-
-  } catch (err) {
-    console.error('Stalled leads job error:', err.message);
+  async function selectClient(client) {
+    currentClientId = client.id;
+    document.getElementById('clientName').textContent = client.business_name || client.name;
+    document.getElementById('clientNiche').textContent = client.niche || '—';
+    document.querySelectorAll('.client-item').forEach(el => el.classList.toggle('active', el.dataset.id === client.id));
+    await loadLeads();
   }
-}
 
-// --------------------------------------------------------
-// NURTURE JOB — runs once a day
-// Sends nurture emails and monthly calls to cold leads
-// --------------------------------------------------------
-async function runNurtureJob() {
-  console.log('Running nurture job...');
+  async function loadLeads() {
+    if (!currentClientId) return;
+    try {
+      const leads = await sb(`ldm_leads?client_id=eq.${currentClientId}&select=*&order=created_at.desc`);
+      allLeads = leads || [];
+      renderStats();
+      renderLeads();
+    } catch (e) { console.error('Failed to load leads', e); }
+  }
 
-  try {
-    const nurtureLeads = await getNurtureLeadsDue();
+  function renderStats() {
+    const count = s => allLeads.filter(l => l.status === s).length;
+    document.getElementById('statTotal').textContent = allLeads.length;
+    document.getElementById('statNew').textContent = count('new');
+    document.getElementById('statAttempted').textContent = count('attempted');
+    document.getElementById('statBooked').textContent = count('booked');
+    document.getElementById('statDead').textContent = count('dead');
+    document.getElementById('statNurture').textContent = count('nurture');
+  }
 
-    for (const item of nurtureLeads) {
-      const lead = item.ldm_leads;
-      const step = item.step_number;
+  function renderLeads() {
+    const filtered = currentFilter === 'all' ? allLeads : allLeads.filter(l => l.status === currentFilter);
+    const tbody = document.getElementById('leadsTable');
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><h3>No leads here</h3><p>Inject a test lead or wait for Meta leads to come in.</p></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = filtered.map(lead => `
+      <tr onclick="openLead('${lead.id}')">
+        <td><div class="lead-name">${lead.name || '—'}</div></td>
+        <td><div class="lead-phone">${lead.phone || '—'}</div></td>
+        <td><div class="lead-offer">${lead.offer_seen || '—'}</div></td>
+        <td><span class="badge ${lead.status}">${lead.status}</span></td>
+        <td><div class="lead-attempts">—</div></td>
+        <td><div class="lead-time">${formatDate(lead.created_at)}</div></td>
+      </tr>
+    `).join('');
+  }
 
-      console.log(`Nurture lead ${lead.id} — step ${step}`);
-
-      // Every 3rd step — attempt a call (monthly touch)
-      if (step % 3 === 0) {
-        const result = await triggerRetellCall(lead, step);
-        await logActivity(lead.id, 'call', result.success ? 'no_answer' : 'bounced', `Nurture call step ${step}`);
+  async function openLead(leadId) {
+    const lead = allLeads.find(l => l.id === leadId);
+    if (!lead) return;
+    currentLeadId = leadId;
+    document.getElementById('modalLeadName').textContent = lead.name || '—';
+    document.getElementById('modalLeadId').textContent = lead.id;
+    document.getElementById('modalPhone').textContent = lead.phone || '—';
+    document.getElementById('modalEmail').textContent = lead.email || '—';
+    document.getElementById('modalOffer').textContent = lead.offer_seen || '—';
+    document.getElementById('modalAdded').textContent = formatDate(lead.created_at);
+    document.getElementById('modalStatus').value = lead.status;
+    try {
+      const activity = await sb(`ldm_contact_activity?lead_id=eq.${leadId}&select=*&order=created_at.desc`);
+      const list = document.getElementById('activityList');
+      if (!activity || activity.length === 0) {
+        list.innerHTML = '<div style="color:var(--muted);font-size:12px">No activity yet.</div>';
+      } else {
+        list.innerHTML = activity.map(a => `
+          <div class="activity-item">
+            <span class="activity-type">${a.activity_type}</span>
+            <span class="activity-outcome">${a.outcome}${a.notes ? ' — ' + a.notes : ''}</span>
+            <span class="activity-time">${formatDate(a.created_at)}</span>
+          </div>
+        `).join('');
       }
-
-      // Always send email on nurture steps
-      // Email sending plugs into your existing email system
-      // Just log it here for now — connect your emailer later
-      await logActivity(lead.id, 'email', 'sent', `Nurture email step ${step}`);
-
-      // Update nurture to next step
-      await updateNurtureStep(item.id, step);
-    }
-
-  } catch (err) {
-    console.error('Nurture job error:', err.message);
+    } catch (e) { console.error(e); }
+    document.getElementById('leadModal').classList.add('open');
   }
-}
 
-// --------------------------------------------------------
-// REGISTER ALL CRON JOBS
-// --------------------------------------------------------
-function startJobs() {
-  // Follow up — every hour
-  cron.schedule('0 * * * *', runFollowUpJob);
+  async function updateStatus() {
+    const newStatus = document.getElementById('modalStatus').value;
+    try {
+      await sb(`ldm_leads?id=eq.${currentLeadId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: newStatus }),
+        prefer: 'return=minimal',
+      });
+      const lead = allLeads.find(l => l.id === currentLeadId);
+      if (lead) lead.status = newStatus;
+      renderStats();
+      renderLeads();
+    } catch (e) { alert('Failed to update status'); }
+  }
 
-  // Stalled leads check — every 30 minutes
-  cron.schedule('*/30 * * * *', runStalledLeadsJob);
+  function setFilter(filter, btn) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderLeads();
+  }
 
-  // Nurture — once a day at 9am
-  cron.schedule('0 9 * * *', runNurtureJob);
+  function openAddClient() { document.getElementById('addClientModal').classList.add('open'); }
 
-  console.log('All cron jobs started');
-}
+  async function saveClient() {
+    const name = document.getElementById('newClientName').value.trim();
+    const niche = document.getElementById('newClientNiche').value.trim();
+    const email = document.getElementById('newClientEmail').value.trim();
+    const phone = document.getElementById('newClientPhone').value.trim();
+    if (!name) return alert('Business name is required');
+    try {
+      await sb('ldm_clients', {
+        method: 'POST',
+        body: JSON.stringify({ business_name: name, niche, email, phone }),
+      });
+      closeModal('addClientModal');
+      document.getElementById('newClientName').value = '';
+      document.getElementById('newClientNiche').value = '';
+      document.getElementById('newClientEmail').value = '';
+      document.getElementById('newClientPhone').value = '';
+      loadClients();
+    } catch (e) { alert('Failed to save client'); }
+  }
 
-module.exports = { startJobs };
+  function openInjectLead() {
+    if (!currentClientId) return alert('Select a client first');
+    document.getElementById('injectModal').classList.add('open');
+  }
+
+  async function injectLead() {
+    const payload = {
+      client_id: currentClientId,
+      name: document.getElementById('injectName').value || 'Test Lead',
+      phone: document.getElementById('injectPhone').value || '+1234567890',
+      email: document.getElementById('injectEmail').value || 'test@example.com',
+      offer_seen: document.getElementById('injectOffer').value || 'Free roofing inspection',
+    };
+    try {
+      const res = await fetch(`${BACKEND_URL}/webhook/meta`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Backend error');
+      closeModal('injectModal');
+      setTimeout(loadLeads, 1000);
+    } catch (e) { alert('Failed to inject lead. Is the backend running?'); }
+  }
+
+  function formatDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) + ' ' +
+           d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+  });
+
+  loadClients();
+  setInterval(() => { if (currentClientId) loadLeads(); }, 30000);
+</script>
+</body>
+</html>
