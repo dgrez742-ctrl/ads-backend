@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const webhookRoutes = require('./routes/webhooks');
 const { startJobs } = require('./jobs/followUp');
 
@@ -15,8 +16,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static(path.join(__dirname, '..')));
-
+// ---- API ROUTES ----
 app.use('/webhook', webhookRoutes);
 
 app.get('/health', (req, res) => {
@@ -35,8 +35,9 @@ app.post('/test/lead', async (req, res) => {
   return require('./routes/webhooks').handle(req, res);
 });
 
+// ---- SERVE DASHBOARD ----
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../index.html'));
+  res.sendFile('/app/Index.html');
 });
 
 app.use((err, req, res, next) => {
