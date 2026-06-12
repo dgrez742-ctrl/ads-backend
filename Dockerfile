@@ -1,27 +1,20 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
 COPY Package.json ./package.json
 RUN npm install
 
-COPY Index.js ./Index.js
-COPY Supabase.js ./Supabase.js
-COPY Webhooks.js ./Webhooks.js
-COPY Retell.js ./Retell.js
-COPY Twilio.js ./Twilio.js
-COPY Leads.js ./Leads.js
-COPY FollowUp.js ./FollowUp.js
-COPY Dashboard.html ./Dashboard.html
+RUN mkdir -p src/routes src/services src/jobs
 
-RUN mkdir -p src/routes src/services src/jobs && \
-    cp Index.js src/index.js && \
-    cp Supabase.js src/supabase.js && \
-    cp Webhooks.js src/routes/webhooks.js && \
-    cp Retell.js src/services/retell.js && \
-    cp Twilio.js src/services/twilio.js && \
-    cp Leads.js src/services/leads.js && \
-    cp FollowUp.js src/jobs/followUp.js
+COPY Index.js ./src/index.js
+COPY Supabase.js ./src/supabase.js
+COPY Webhooks.js ./src/routes/webhooks.js
+COPY Retell.js ./src/services/retell.js
+COPY Twilio.js ./src/services/twilio.js
+COPY Leads.js ./src/services/leads.js
+COPY FollowUp.js ./src/jobs/followUp.js
+COPY index.html ./index.html
 
 EXPOSE 3000
 
