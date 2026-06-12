@@ -15,10 +15,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// ---- SERVE DASHBOARD ----
 app.use(express.static(path.join(__dirname, '..')));
 
-// ---- API ROUTES ----
 app.use('/webhook', webhookRoutes);
 
 app.get('/health', (req, res) => {
@@ -37,7 +35,6 @@ app.post('/test/lead', async (req, res) => {
   return require('./routes/webhooks').handle(req, res);
 });
 
-// ---- SERVE DASHBOARD FOR ALL OTHER ROUTES ----
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../index.html'));
 });
