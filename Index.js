@@ -16,7 +16,7 @@ app.use((req, res, next) => {
 });
 
 // ---- SERVE DASHBOARD ----
-app.use(express.static(path.join(__dirname, '../dashboard')));
+app.use(express.static(path.join(__dirname, '..')));
 
 // ---- API ROUTES ----
 app.use('/webhook', webhookRoutes);
@@ -39,7 +39,7 @@ app.post('/test/lead', async (req, res) => {
 
 // ---- SERVE DASHBOARD FOR ALL OTHER ROUTES ----
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dashboard/index.html'));
+  res.sendFile(path.join(__dirname, '../index.html'));
 });
 
 app.use((err, req, res, next) => {
