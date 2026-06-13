@@ -1,9 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
 const webhookRoutes = require('./routes/webhooks');
 const { startJobs } = require('./jobs/followUp');
+const supabase = require('./supabase');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -19,10 +19,69 @@ app.use((req, res, next) => {
 // ---- API ROUTES ----
 app.use('/webhook', webhookRoutes);
 
+// GET all clients
+app.get('/clients', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('ldm_clients').select('*').order('created_at', { ascending: true });
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST create client
+app.post('/clients', async (req, res) => {
+  try {
+    const { business_name, niche, email, phone } = req.body;
+    const { data, error } = await supabase.from('ldm_clients').insert([{ business_name, niche, email, phone }]).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET leads for a client
+app.get('/clients/:id/leads', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('ldm_leads').select('*').eq('client_id', req.params.id).order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH update lead status
+app.patch('/leads/:id', async (req, res) => {
+  try {
+    const { status } = req.body;
+    const { data, error } = await supabase.from('ldm_leads').update({ status }).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET activity for a lead
+app.get('/leads/:id/activity', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('ldm_contact_activity').select('*').eq('lead_id', req.params.id).order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Health check
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Test lead injection
 app.post('/test/lead', async (req, res) => {
   const fakeLead = {
     client_id: req.body.client_id || 'test-client-id',
