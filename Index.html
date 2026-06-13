@@ -341,7 +341,7 @@
       </div>
     </div>
 
-    <div class="stats" id="statsRow">
+    <div class="stats">
       <div class="stat"><div class="stat-value" id="statTotal">—</div><div class="stat-label">Total Leads</div></div>
       <div class="stat"><div class="stat-value" id="statNew">—</div><div class="stat-label">New</div></div>
       <div class="stat"><div class="stat-value" id="statAttempted">—</div><div class="stat-label">Attempted</div></div>
@@ -373,14 +373,14 @@
           </tr>
         </thead>
         <tbody id="leadsTable">
-          <tr><td colspan="6"><div class="empty"><h3>No client selected</h3><p>Choose a client from the sidebar to view their leads.</p></div></td></tr>
+          <tr><td colspan="6"><div class="empty"><h3>No client selected</h3><p>Choose a client from the sidebar.</p></div></td></tr>
         </tbody>
       </table>
     </div>
   </main>
 </div>
 
-<!-- LEAD DETAIL MODAL -->
+<!-- LEAD MODAL -->
 <div class="modal-overlay" id="leadModal">
   <div class="modal">
     <div class="modal-header">
@@ -455,33 +455,25 @@
 </div>
 
 <script>
-  const BACKEND_URL = 'https://ads-backend-production-d450.up.railway.app';
-  const SUPABASE_URL = 'https://tcqfhdevbmizeenqreoc.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjcWZoZGV2Ym1pemVlbnFyZW9jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1MzI3ODksImV4cCI6MjA4NjEwODc4OX0.F3DfuxkjtUQBgUtQfE3BLovOrL44G91H_44Ei8YGLIw';
+  const API = 'https://ads-backend-production-d450.up.railway.app';
 
   let currentClientId = null;
   let currentFilter = 'all';
   let allLeads = [];
   let currentLeadId = null;
 
-  async function sb(path, options = {}) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': options.prefer || 'return=representation',
-        ...options.headers,
-      },
+  async function api(path, options = {}) {
+    const res = await fetch(`${API}${path}`, {
+      headers: { 'Content-Type': 'application/json' },
       ...options,
     });
     if (!res.ok) throw new Error(await res.text());
-    return res.json().catch(() => null);
+    return res.json();
   }
 
   async function loadClients() {
     try {
-      const clients = await sb('ldm_clients?select=*&order=created_at.asc');
+      const clients = await api('/clients');
       const list = document.getElementById('clientList');
       list.innerHTML = '';
       if (!clients || clients.length === 0) {
@@ -510,7 +502,7 @@
   async function loadLeads() {
     if (!currentClientId) return;
     try {
-      const leads = await sb(`ldm_leads?client_id=eq.${currentClientId}&select=*&order=created_at.desc`);
+      const leads = await api(`/clients/${currentClientId}/leads`);
       allLeads = leads || [];
       renderStats();
       renderLeads();
@@ -558,7 +550,7 @@
     document.getElementById('modalAdded').textContent = formatDate(lead.created_at);
     document.getElementById('modalStatus').value = lead.status;
     try {
-      const activity = await sb(`ldm_contact_activity?lead_id=eq.${leadId}&select=*&order=created_at.desc`);
+      const activity = await api(`/leads/${leadId}/activity`);
       const list = document.getElementById('activityList');
       if (!activity || activity.length === 0) {
         list.innerHTML = '<div style="color:var(--muted);font-size:12px">No activity yet.</div>';
@@ -578,10 +570,9 @@
   async function updateStatus() {
     const newStatus = document.getElementById('modalStatus').value;
     try {
-      await sb(`ldm_leads?id=eq.${currentLeadId}`, {
+      await api(`/leads/${currentLeadId}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus }),
-        prefer: 'return=minimal',
       });
       const lead = allLeads.find(l => l.id === currentLeadId);
       if (lead) lead.status = newStatus;
@@ -606,7 +597,7 @@
     const phone = document.getElementById('newClientPhone').value.trim();
     if (!name) return alert('Business name is required');
     try {
-      await sb('ldm_clients', {
+      await api('/clients', {
         method: 'POST',
         body: JSON.stringify({ business_name: name, niche, email, phone }),
       });
@@ -633,7 +624,7 @@
       offer_seen: document.getElementById('injectOffer').value || 'Free roofing inspection',
     };
     try {
-      const res = await fetch(`${BACKEND_URL}/webhook/meta`, {
+      const res = await fetch(`${API}/webhook/meta`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
