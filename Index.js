@@ -22,7 +22,10 @@ app.use('/webhook', webhookRoutes);
 // GET all clients
 app.get('/clients', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('ldm_clients').select('*').order('created_at', { ascending: true });
+    const { data, error } = await supabase
+      .from('ldm_clients')
+      .select('*')
+      .order('created_at', { ascending: true });
     if (error) throw error;
     res.json(data);
   } catch (err) {
@@ -34,7 +37,17 @@ app.get('/clients', async (req, res) => {
 app.post('/clients', async (req, res) => {
   try {
     const { business_name, niche, email, phone } = req.body;
-    const { data, error } = await supabase.from('ldm_clients').insert([{ business_name, niche, email, phone }]).select().single();
+    const { data, error } = await supabase
+      .from('ldm_clients')
+      .insert([{
+        business_name,
+        name: business_name,
+        niche,
+        email,
+        phone
+      }])
+      .select()
+      .single();
     if (error) throw error;
     res.json(data);
   } catch (err) {
@@ -45,7 +58,11 @@ app.post('/clients', async (req, res) => {
 // GET leads for a client
 app.get('/clients/:id/leads', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('ldm_leads').select('*').eq('client_id', req.params.id).order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('ldm_leads')
+      .select('*')
+      .eq('client_id', req.params.id)
+      .order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data);
   } catch (err) {
@@ -57,7 +74,12 @@ app.get('/clients/:id/leads', async (req, res) => {
 app.patch('/leads/:id', async (req, res) => {
   try {
     const { status } = req.body;
-    const { data, error } = await supabase.from('ldm_leads').update({ status }).eq('id', req.params.id).select().single();
+    const { data, error } = await supabase
+      .from('ldm_leads')
+      .update({ status })
+      .eq('id', req.params.id)
+      .select()
+      .single();
     if (error) throw error;
     res.json(data);
   } catch (err) {
@@ -68,7 +90,11 @@ app.patch('/leads/:id', async (req, res) => {
 // GET activity for a lead
 app.get('/leads/:id/activity', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('ldm_contact_activity').select('*').eq('lead_id', req.params.id).order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('ldm_contact_activity')
+      .select('*')
+      .eq('lead_id', req.params.id)
+      .order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data);
   } catch (err) {
