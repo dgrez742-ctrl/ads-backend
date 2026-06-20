@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"/>
+<title>Phone</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:#000;}
+  body{
+    font-family:-apple-system,Roboto,'Segoe UI',Helvetica,Arial,sans-serif;
+    -webkit-user-select:none;user-select:none;
+    color:#fff;
+  }
+
+  .screen{
+    position:fixed;inset:0;height:100vh;width:100vw;
+    display:none;flex-direction:column;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  .screen.show{display:flex;}
+
+  /* ── IDLE (standby / waiting) ── */
+  #idleScreen{
+    background:#111;
+    align-items:center;justify-content:center;
+    text-align:center;padding:24px;
+  }
+  .standby-clock{font-size:56px;font-weight:300;letter-spacing:-1px;color:#eee;margin-bottom:6px;}
+  .standby-date{font-size:14px;color:#777;margin-bottom:40px;}
+  .standby-note{font-size:12px;color:#555;max-width:240px;line-height:1.5;}
+  .standby-led{width:6px;height:6px;border-radius:50%;background:#2d8c4e;margin-bottom:18px;animation:ledBlink 2.4s infinite;}
+  @keyframes ledBlink{0%,100%{opacity:0.25;}50%{opacity:1;}}
+
+  /* ── INCOMING CALL ── */
+  #incomingScreen{
+    background:#0b0b0c;
+    background-size:cover;background-position:center;
+  }
+  .ic-top{
+    display:flex;flex-direction:column;align-items:center;
+    padding-top:64px;
+  }
+  .ic-network{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:64px;}
+  .ic-photo{
+    width:120px;height:120px;border-radius:50%;
+    background:#3a3d42;
+    display:flex;align-items:center;justify-content:center;
+    font-size:46px;font-weight:500;color:rgba(255,255,255,0.85);
+    margin-bottom:20px;
+  }
+  .ic-name{font-size:28px;font-weight:400;margin-bottom:6px;}
+  .ic-number{font-size:15px;color:rgba(255,255,255,0.55);}
+
+  .ic-mid{flex:1;display:flex;align-items:center;justify-content:center;}
+  .ic-label{font-size:13px;color:rgba(255,255,255,0.45);letter-spacing:0.02em;}
+
+  .ic-bottom{padding:0 36px 56px;}
+  .ic-swipe-row{
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .ic-action{
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    background:none;border:none;
+  }
+  .ic-action-circle{
+    width:64px;height:64px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .ic-action-circle svg{width:26px;height:26px;}
+  .ic-decline .ic-action-circle{background:#e8453c;}
+  .ic-answer .ic-action-circle{background:#3ddc6f;animation:answerBreathe 1.8s infinite;}
+  @keyframes answerBreathe{
+    0%,100%{box-shadow:0 0 0 0 rgba(61,220,111,0.45);}
+    50%{box-shadow:0 0 0 14px rgba(61,220,111,0);}
+  }
+  .ic-action-lbl{font-size:12px;color:rgba(255,255,255,0.65);}
+  .ic-action:active .ic-action-circle{transform:scale(0.93);}
+  .ic-action-circle{transition:transform 0.1s ease;}
+
+  /* ── IN CALL ── */
+  #incallScreen{
+    background:#0b0b0c;
+  }
+  .call-top{display:flex;flex-direction:column;align-items:center;padding-top:64px;}
+  .call-status-txt{font-size:14px;color:rgba(255,255,255,0.55);margin-bottom:6px;height:18px;}
+  .call-photo{
+    width:96px;height:96px;border-radius:50%;
+    background:#2c3a30;
+    display:flex;align-items:center;justify-content:center;
+    font-size:36px;font-weight:500;color:rgba(255,255,255,0.85);
+    margin:18px 0 14px;
+  }
+  .call-name{font-size:24px;font-weight:400;margin-bottom:6px;}
+  .call-timer{font-size:14px;color:rgba(255,255,255,0.5);font-variant-numeric:tabular-nums;}
+
+  .call-mid{flex:1;display:flex;align-items:center;justify-content:center;width:100%;}
+  .call-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);
+    gap:28px 36px;padding:0 36px;width:100%;max-width:340px;
+  }
+  .call-grid-btn{
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    background:none;border:none;
+  }
+  .call-grid-icon{
+    width:60px;height:60px;border-radius:50%;
+    background:rgba(255,255,255,0.08);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .call-grid-icon svg{width:24px;height:24px;}
+  .call-grid-icon.on{background:rgba(255,255,255,0.92);}
+  .call-grid-icon.on svg{filter:invert(1) brightness(0.1);}
+  .call-grid-lbl{font-size:11px;color:rgba(255,255,255,0.6);}
+
+  .call-bottom{padding:0 0 56px;display:flex;justify-content:center;}
+  .call-end-btn{
+    width:64px;height:64px;border-radius:50%;border:none;
+    background:#e8453c;display:flex;align-items:center;justify-content:center;
+    transition:transform 0.1s ease;
+  }
+  .call-end-btn svg{width:26px;height:26px;transform:rotate(135deg);}
+  .call-end-btn:active{transform:scale(0.93);}
+
+  /* ── ENDED (brief) ── */
+  #endedScreen{
+    background:#0b0b0c;align-items:center;justify-content:center;
+    text-align:center;
+  }
+  .ended-label{font-size:16px;color:rgba(255,255,255,0.8);margin-bottom:6px;}
+  .ended-sub{font-size:13px;color:rgba(255,255,255,0.45);}
+
+  audio{display:none;}
+
+  .fs-hint{
+    position:fixed;bottom:10px;left:0;right:0;text-align:center;
+    font-size:11px;color:rgba(255,255,255,0.3);z-index:50;
+  }
+</style>
+</head>
+<body>
+
+<div class="screen show" id="idleScreen">
+  <div class="standby-led"></div>
+  <div class="standby-clock" id="clockEl">--:--</div>
+  <div class="standby-date" id="dateEl">—</div>
+  <div class="standby-note">Standing by. Leave this open — it'll ring automatically when a demo call is triggered.</div>
+</div>
+
+<div class="screen" id="incomingScreen">
+  <div class="ic-top">
+    <div class="ic-network">Incoming call</div>
+    <div class="ic-photo" id="icPhoto">?</div>
+    <div class="ic-name" id="icName">Unknown</div>
+    <div class="ic-number" id="icNumber"></div>
+  </div>
+  <div class="ic-mid">
+    <div class="ic-label" id="icSubLabel">Mobile</div>
+  </div>
+  <div class="ic-bottom">
+    <div class="ic-swipe-row">
+      <button class="ic-action ic-decline" onclick="declineCall()">
+        <div class="ic-action-circle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.7 12.7 0 0 0 2.81.7A2 2 0 0 1 22 17v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 2 3.18 2 2 0 0 1 4 1h3a2 2 0 0 1 2 1.72c.13.95.36 1.89.69 2.81a2 2 0 0 1-.45 2.11z"/><line x1="23" y1="1" x2="1" y2="23"/></svg>
+        </div>
+        <span class="ic-action-lbl">Decline</span>
+      </button>
+      <button class="ic-action ic-answer" onclick="answerCall()">
+        <div class="ic-action-circle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.95.36 1.89.69 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.92.33 1.86.56 2.81.69A2 2 0 0 1 22 16.92z"/></svg>
+        </div>
+        <span class="ic-action-lbl">Answer</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="incallScreen">
+  <div class="call-top">
+    <div class="call-status-txt" id="callStatusTxt">Connected</div>
+    <div class="call-photo" id="callPhoto">?</div>
+    <div class="call-name" id="callName">Unknown</div>
+    <div class="call-timer" id="callTimer">00:00</div>
+  </div>
+  <div class="call-mid">
+    <div class="call-grid">
+      <button class="call-grid-btn" onclick="toggleMute()">
+        <div class="call-grid-icon" id="muteIcon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </div>
+        <span class="call-grid-lbl">Mute</span>
+      </button>
+      <button class="call-grid-btn" onclick="toggleKeypad()">
+        <div class="call-grid-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="5" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="19" cy="5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="19" r="1"/><circle cx="12" cy="19" r="1"/><circle cx="19" cy="19" r="1"/></svg>
+        </div>
+        <span class="call-grid-lbl">Keypad</span>
+      </button>
+      <button class="call-grid-btn" onclick="toggleSpeaker()">
+        <div class="call-grid-icon on" id="speakerIcon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        </div>
+        <span class="call-grid-lbl">Speaker</span>
+      </button>
+    </div>
+  </div>
+  <div class="call-bottom">
+    <button class="call-end-btn" onclick="endCall()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.95.36 1.89.69 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.92.33 1.86.56 2.81.69A2 2 0 0 1 22 16.92z"/></svg>
+    </button>
+  </div>
+</div>
+
+<div class="screen" id="endedScreen">
+  <div class="ended-label" id="endedLabel">Call ended</div>
+  <div class="ended-sub" id="endedSub"></div>
+</div>
+
+<div class="fs-hint" id="fsHint" style="display:none;">Tap anywhere to enable fullscreen</div>
+
+<audio id="ringtone" loop preload="auto">
+  <source src="https://cdn.freesound.org/previews/536/536420_7107243-lq.mp3" type="audio/mpeg">
+</audio>
+
+<script src="https://cdn.jsdelivr.net/npm/eventemitter3@5.0.4/dist/eventemitter3.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.19.2/dist/livekit-client.umd.js"></script>
+<script>
+  window.eventemitter3 = window.EventEmitter3;
+  window.livekitClient = window.LivekitClient;
+</script>
+<script src="https://cdn.jsdelivr.net/npm/retell-client-js-sdk@2.0.8/dist/index.umd.js"></script>
+
+<script>
+  const API = 'https://ads-backend-production-d450.up.railway.app';
+
+  let currentLead = null;
+  let pollTimer = null;
+  let clockTimer = null;
+  let callTimer = null;
+  let callSeconds = 0;
+  let muted = false;
+  let speakerOn = true;
+  let wakeLock = null;
+
+  let retellClient = null;
+  let retellConnected = false;
+
+  // --------------------------------------------------------
+  // STANDBY CLOCK
+  // --------------------------------------------------------
+  function tickClock(){
+    const now = new Date();
+    document.getElementById('clockEl').textContent =
+      now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    document.getElementById('dateEl').textContent =
+      now.toLocaleDateString([], {weekday:'long',month:'long',day:'numeric'});
+  }
+
+  // --------------------------------------------------------
+  // FULLSCREEN + WAKE LOCK
+  // Real phone call UIs take the whole screen and never sleep mid-call.
+  // Fullscreen API requires a user gesture in most browsers, so we request
+  // it on first tap and silently retry on every incoming call.
+  // --------------------------------------------------------
+  async function requestFullscreen(){
+    try{
+      const el = document.documentElement;
+      if(el.requestFullscreen) await el.requestFullscreen();
+      else if(el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+      document.getElementById('fsHint').style.display = 'none';
+    }catch(e){ /* ignore — some browsers require a fresh gesture each time */ }
+  }
+
+  async function requestWakeLock(){
+    try{
+      if('wakeLock' in navigator){
+        wakeLock = await navigator.wakeLock.request('screen');
+      }
+    }catch(e){ console.warn('Wake lock unavailable', e); }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible' && !wakeLock){
+      requestWakeLock();
+    }
+  });
+
+  document.body.addEventListener('click', () => {
+    requestFullscreen();
+    requestWakeLock();
+  }, { once:false });
+
+  // --------------------------------------------------------
+  // SCREEN SWITCHING
+  // --------------------------------------------------------
+  function showScreen(id){
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('show'));
+    document.getElementById(id).classList.add('show');
+  }
+
+  // --------------------------------------------------------
+  // POLL BACKEND FOR PENDING DEMO CALL
+  // --------------------------------------------------------
+  function startPolling(){
+    clearInterval(pollTimer);
+    pollTimer = setInterval(checkForCall, 1500);
+  }
+
+  async function checkForCall(){
+    try{
+      const res = await fetch(`${API}/simulator/pending-call`);
+      if(!res.ok) return;
+      const data = await res.json();
+      if(data && data.lead){
+        clearInterval(pollTimer);
+        triggerIncomingCall(data);
+      }
+    }catch(e){ /* silent — keep polling */ }
+  }
+
+  // --------------------------------------------------------
+  // INCOMING CALL — ring on screen, silently connect Retell in background
+  // --------------------------------------------------------
+  function triggerIncomingCall(data){
+    currentLead = data.lead;
+
+    const initial = (currentLead.name || '?').charAt(0).toUpperCase();
+    document.getElementById('icPhoto').textContent = initial;
+    document.getElementById('icName').textContent = currentLead.name || 'Unknown';
+    document.getElementById('icNumber').textContent = currentLead.phone || '';
+    document.getElementById('icSubLabel').textContent = 'Mobile';
+
+    showScreen('incomingScreen');
+    requestFullscreen();
+    requestWakeLock();
+
+    const tone = document.getElementById('ringtone');
+    tone.currentTime = 0;
+    tone.play().catch(()=>{});
+
+    if(navigator.vibrate) navigator.vibrate([500,300,500,300,500]);
+
+    // Silently connect the Retell web call session in the background.
+    // The session is fully live by the time the user answers — mic stays
+    // muted and we never call startAudioPlayback() until Answer, so
+    // nothing is heard in either direction while it's "ringing".
+    connectRetellSilently(data.access_token);
+  }
+
+  async function connectRetellSilently(accessToken){
+    try{
+      if(!window.retellClientJsSdk){
+        console.error('Retell SDK not loaded');
+        return;
+      }
+      retellClient = new window.retellClientJsSdk.RetellWebClient();
+      retellClient.on('call_started', () => {
+        retellConnected = true;
+        retellClient.mute();
+      });
+      retellClient.on('call_ended', () => {
+        retellConnected = false;
+      });
+      retellClient.on('error', (err) => {
+        console.error('Retell call error', err);
+      });
+      await retellClient.startCall({ accessToken });
+    }catch(e){
+      console.error('Failed to pre-warm Retell call', e);
+    }
+  }
+
+  // --------------------------------------------------------
+  // ANSWER — unmute the already-live session, feels instant
+  // --------------------------------------------------------
+  async function answerCall(){
+    document.getElementById('ringtone').pause();
+    if(navigator.vibrate) navigator.vibrate(0);
+
+    document.getElementById('callPhoto').textContent = (currentLead.name||'?').charAt(0).toUpperCase();
+    document.getElementById('callName').textContent = currentLead.name || 'Unknown';
+    document.getElementById('callStatusTxt').textContent = 'Connected';
+    showScreen('incallScreen');
+
+    if(retellClient && retellConnected){
+      try{
+        retellClient.unmute();
+        await retellClient.startAudioPlayback();
+      }catch(e){ console.error('Failed to unmute Retell call', e); }
+    }
+
+    callSeconds = 0;
+    clearInterval(callTimer);
+    callTimer = setInterval(() => {
+      callSeconds++;
+      const m = String(Math.floor(callSeconds/60)).padStart(2,'0');
+      const s = String(callSeconds%60).padStart(2,'0');
+      document.getElementById('callTimer').textContent = `${m}:${s}`;
+    }, 1000);
+
+    try{
+      await fetch(`${API}/simulator/answer`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ lead_id: currentLead.id })
+      });
+    }catch(e){ console.error(e); }
+  }
+
+  // --------------------------------------------------------
+  // DECLINE — silently kill the Retell session, nobody hears anything
+  // --------------------------------------------------------
+  async function declineCall(){
+    document.getElementById('ringtone').pause();
+    if(navigator.vibrate) navigator.vibrate(0);
+
+    if(retellClient){
+      try{ retellClient.stopCall(); }catch(e){}
+    }
+
+    showEnded('Declined', 'Logging as no answer…');
+
+    try{
+      await fetch(`${API}/simulator/decline`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ lead_id: currentLead.id })
+      });
+    }catch(e){ console.error(e); }
+
+    resetToIdle(1800);
+  }
+
+  // --------------------------------------------------------
+  // END CALL
+  // --------------------------------------------------------
+  async function endCall(){
+    clearInterval(callTimer);
+    if(retellClient){
+      try{ retellClient.stopCall(); }catch(e){}
+    }
+    const durationLabel = document.getElementById('callTimer').textContent;
+    showEnded('Call ended', `Duration ${durationLabel}`);
+
+    try{
+      await fetch(`${API}/simulator/end`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ lead_id: currentLead.id, duration: callSeconds })
+      });
+    }catch(e){ console.error(e); }
+
+    resetToIdle(1800);
+  }
+
+  function showEnded(label, sub){
+    document.getElementById('endedLabel').textContent = label;
+    document.getElementById('endedSub').textContent = sub;
+    showScreen('endedScreen');
+  }
+
+  function resetToIdle(delay){
+    setTimeout(() => {
+      showScreen('idleScreen');
+      currentLead = null;
+      retellClient = null;
+      retellConnected = false;
+      muted = false; speakerOn = true;
+      startPolling();
+    }, delay);
+  }
+
+  // --------------------------------------------------------
+  // IN-CALL CONTROLS
+  // --------------------------------------------------------
+  function toggleMute(){
+    muted = !muted;
+    document.getElementById('muteIcon').classList.toggle('on', muted);
+    if(retellClient && retellConnected){
+      muted ? retellClient.mute() : retellClient.unmute();
+    }
+  }
+  function toggleSpeaker(){
+    speakerOn = !speakerOn;
+    document.getElementById('speakerIcon').classList.toggle('on', speakerOn);
+  }
+  function toggleKeypad(){ /* visual only — no DTMF needed for a demo call */ }
+
+  // --------------------------------------------------------
+  // INIT
+  // --------------------------------------------------------
+  tickClock();
+  clockTimer = setInterval(tickClock, 1000);
+  startPolling();
+</script>
+</body>
+</html>
