@@ -34,15 +34,21 @@ async function triggerRetellCall(lead, attemptNumber) {
 
   const account = getRetellAccount();
 
-  // Build context that Retell agent uses to personalize the call
+  // Build context that Retell agent uses to personalize the call.
+  // IMPORTANT: every value in retell_llm_dynamic_variables MUST be a
+  // string — Retell's API returns 400 Bad Request if any value is a
+  // boolean, number, or other type. attempt_number/is_first_call/
+  // is_followup/is_nurture were being sent as a number and booleans,
+  // which is the actual cause of "Request failed with status code 400"
+  // on every real outbound call.
   const callContext = {
-    lead_name: lead.name,
+    lead_name: lead.name || 'there',
     offer_seen: lead.offer_seen || 'roofing services',
-    attempt_number: attemptNumber,
-    is_first_call: attemptNumber === 1,
-    is_followup: attemptNumber > 1,
-    is_nurture: lead.status === 'nurture',
-    client_id: lead.client_id,
+    attempt_number: String(attemptNumber),
+    is_first_call: attemptNumber === 1 ? 'true' : 'false',
+    is_followup: attemptNumber > 1 ? 'true' : 'false',
+    is_nurture: lead.status === 'nurture' ? 'true' : 'false',
+    client_id: lead.client_id || '',
   };
 
   try {
@@ -92,13 +98,30 @@ async function triggerRetellCall(lead, attemptNumber) {
         );
         return { success: true, callId: retryResponse.data.call_id };
       } catch (retryErr) {
-        console.error('All Retell accounts failed:', retryErr.message);
+        if (retryErr.response) {
+          console.error(
+            `All Retell accounts failed — Retell responded ${retryErr.response.status}:`,
+            JSON.stringify(retryErr.response.data)
+          );
+        } else {
+          console.error('All Retell accounts failed:', retryErr.message);
+        }
         return { success: false, error: 'All Retell accounts exhausted' };
       }
     }
 
-    console.error(`Retell call failed for lead ${lead.id}:`, err.message);
-    return { success: false, error: err.message };
+    // axios hides the real reason behind a generic "Request failed with
+    // status code 400" message — log Retell's actual response body so we
+    // can see the real validation error instead of guessing.
+    if (err.response) {
+      console.error(
+        `Retell call failed for lead ${lead.id} — Retell responded ${err.response.status}:`,
+        JSON.stringify(err.response.data)
+      );
+    } else {
+      console.error(`Retell call failed for lead ${lead.id}:`, err.message);
+    }
+    return { success: false, error: err.response?.data?.error || err.message };
   }
 }
 
