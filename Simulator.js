@@ -138,8 +138,9 @@ function buildReceptionistVariables(lead) {
     next_saturday: nextWeekday(6),
     next_sunday: nextWeekday(0),
 
-    // Lead context — kept as strings, useful if the prompt is ever extended
-    // to reference the caller by name.
+    // Lead/demo context — declared in the prompt's "Demo Caller Context"
+    // section so the agent actually uses them, rather than sending
+    // variables the prompt never references.
     lead_name: lead.name || 'there',
     offer_seen: lead.offer_seen || 'our services',
   };
