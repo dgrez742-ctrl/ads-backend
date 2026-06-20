@@ -50,6 +50,10 @@ function queueDemoWebCall(lead) {
 // Uses RETELL_API_KEY_1 / RETELL_AGENT_ID_1 — the same account used by the
 // first production rotation slot. No from_number / to_number involved;
 // nothing here can ever dial a real phone.
+//
+// IMPORTANT: every value in retell_llm_dynamic_variables MUST be a string —
+// Retell's API returns 400 Bad Request if any value is a boolean, number,
+// or other type. Compute date helpers as plain strings too.
 // --------------------------------------------------------
 async function createRetellWebCall(lead) {
   const apiKey = process.env.RETELL_API_KEY_1;
@@ -63,11 +67,7 @@ async function createRetellWebCall(lead) {
     'https://api.retellai.com/v2/create-web-call',
     {
       agent_id: agentId,
-      retell_llm_dynamic_variables: {
-        lead_name: lead.name,
-        offer_seen: lead.offer_seen || 'roofing services',
-        is_demo: true,
-      },
+      retell_llm_dynamic_variables: buildReceptionistVariables(lead),
     },
     {
       headers: {
@@ -80,6 +80,58 @@ async function createRetellWebCall(lead) {
   return {
     access_token: response.data.access_token,
     call_id: response.data.call_id,
+  };
+}
+
+// --------------------------------------------------------
+// Builds every {{variable}} the receptionist prompt references.
+// All values are strings, per Retell's requirement.
+// Business-identity fields are read from env vars so they can be changed
+// per-demo without touching code — set sensible defaults via env vars in
+// Railway (see DEMO_BUSINESS_* below), or fall back to generic values.
+// --------------------------------------------------------
+function buildReceptionistVariables(lead) {
+  const fmt = (d) => d.toISOString().slice(0, 10); // YYYY-MM-DD
+  const today = new Date();
+
+  const nextWeekday = (targetDay) => {
+    const d = new Date(today);
+    const diff = (targetDay - d.getDay() + 7) % 7 || 7;
+    d.setDate(d.getDate() + diff);
+    return fmt(d);
+  };
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return {
+    agent_name: process.env.DEMO_AGENT_NAME || 'Ava',
+    business_name: process.env.DEMO_BUSINESS_NAME || 'BotCipher Home Services',
+    industry: process.env.DEMO_INDUSTRY || 'home services',
+    business_phone: process.env.DEMO_BUSINESS_PHONE || '+1 (555) 010-0000',
+    business_email: process.env.DEMO_BUSINESS_EMAIL || 'hello@botcipher.demo',
+    working_hours: process.env.DEMO_WORKING_HOURS || '8 AM to 6 PM',
+    working_days: process.env.DEMO_WORKING_DAYS || 'Monday through Saturday',
+    emergency_keywords: process.env.DEMO_EMERGENCY_KEYWORDS || 'flood, leak, no heat, gas smell, burst pipe',
+    emergency_callback_minutes: process.env.DEMO_EMERGENCY_CALLBACK_MINUTES || '15',
+    tenant_id: process.env.DEMO_TENANT_ID || 'demo-tenant',
+
+    current_date: today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+    day_of_week: today.toLocaleDateString('en-US', { weekday: 'long' }),
+    current_date_iso: fmt(today),
+    tomorrow_iso: fmt(tomorrow),
+    next_monday: nextWeekday(1),
+    next_tuesday: nextWeekday(2),
+    next_wednesday: nextWeekday(3),
+    next_thursday: nextWeekday(4),
+    next_friday: nextWeekday(5),
+    next_saturday: nextWeekday(6),
+    next_sunday: nextWeekday(0),
+
+    // Lead context — kept as strings, useful if the prompt is ever extended
+    // to reference the caller by name.
+    lead_name: lead.name || 'there',
+    offer_seen: lead.offer_seen || 'our services',
   };
 }
 
