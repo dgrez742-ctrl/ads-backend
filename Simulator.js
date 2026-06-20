@@ -40,7 +40,17 @@ function queueDemoWebCall(lead) {
       };
       console.log(`Demo web call ready for lead ${lead.id} — call_id ${webCall.call_id}`);
     } catch (err) {
-      console.error(`Failed to create demo web call for lead ${lead.id}:`, err.message);
+      // axios hides the real reason behind a generic "Request failed with
+      // status code 400" message — log the actual response body from
+      // Retell so we can see the real validation error instead of guessing.
+      if (err.response) {
+        console.error(
+          `Failed to create demo web call for lead ${lead.id} — Retell responded ${err.response.status}:`,
+          JSON.stringify(err.response.data)
+        );
+      } else {
+        console.error(`Failed to create demo web call for lead ${lead.id}:`, err.message);
+      }
     }
   }, DEMO_RING_DELAY_MS);
 }
