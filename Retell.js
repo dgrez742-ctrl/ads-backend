@@ -22,6 +22,16 @@ function rotateRetellAccount() {
 // Trigger an outbound call via Retell
 // Passes full lead context so the agent knows exactly what to say
 async function triggerRetellCall(lead, attemptNumber) {
+  // Guard: no Retell accounts configured at all (missing env vars in
+  // Railway/Render). Without this, getRetellAccount() returns undefined
+  // and the line below throws "Cannot read properties of undefined
+  // (reading 'agentId')" instead of a clear, actionable error.
+  if (retellAccounts.length === 0) {
+    const msg = 'No Retell accounts configured — set RETELL_API_KEY_1 and RETELL_AGENT_ID_1 (at minimum) in your environment variables.';
+    console.error(msg);
+    return { success: false, error: msg };
+  }
+
   const account = getRetellAccount();
 
   // Build context that Retell agent uses to personalize the call
