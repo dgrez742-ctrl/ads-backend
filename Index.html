@@ -789,37 +789,71 @@
   }
 
   /* ── CALL LEAD ── */
-  let callingBarTimeout=null;
+  // The bar now reflects real call state by polling /simulator/status,
+  // instead of fading on a fixed timeout regardless of what's actually
+  // happening on the call (the previous behavior, which is what caused
+  // it to disappear after ~2-3s even while the call was still ringing
+  // or in progress).
+  let callStatusPoll=null;
+
+  const CALL_STATUS_TEXT = {
+    connecting: (n)=>`Calling ${n}...`,
+    ringing:    (n)=>`Ringing ${n}...`,
+    answered:   (n)=>`On call with ${n}`,
+    declined:   (n)=>`${n} declined`,
+    ended:      (n)=>`Call with ${n} ended`,
+    failed:     (n)=>`Call to ${n} failed to connect`,
+  };
+
   async function callLead(){
     const lead=allLeads.find(l=>l.id===currentLeadId);
     if(!lead)return;
     closePanel();
-    const bar=document.getElementById('callingBar');
-    document.getElementById('callingText').textContent=`Calling ${lead.name||'lead'}...`;
-    bar.classList.add('show');
 
-    // Hard timeout backstop — never let the bar sit forever even if the
-    // request hangs or the response shape changes.
-    clearTimeout(callingBarTimeout);
-    callingBarTimeout=setTimeout(()=>{
-      bar.classList.remove('show');
-    },15000);
+    const bar=document.getElementById('callingBar');
+    document.getElementById('callingText').textContent=CALL_STATUS_TEXT.connecting(lead.name||'lead');
+    bar.classList.add('show');
 
     try{
       await api('/call',{method:'POST',body:JSON.stringify({lead_id:currentLeadId})});
     }catch(e){
       console.error(e);
-    }finally{
-      // The /call endpoint only triggers the call — it doesn't wait for the
-      // call to finish — so once it resolves (success or fail) the "Calling..."
-      // state has served its purpose. Give the user a brief moment to read it.
-      clearTimeout(callingBarTimeout);
-      setTimeout(()=>{bar.classList.remove('show');},1200);
-      loadLeads();
+      document.getElementById('callingText').textContent=CALL_STATUS_TEXT.failed(lead.name||'lead');
+      setTimeout(()=>bar.classList.remove('show'),3000);
+      return;
     }
+
+    loadLeads();
+    pollCallStatus(lead);
   }
+
+  function pollCallStatus(lead){
+    clearInterval(callStatusPoll);
+    const bar=document.getElementById('callingBar');
+
+    callStatusPoll = setInterval(async ()=>{
+      try{
+        const data = await api('/simulator/status');
+        const label = CALL_STATUS_TEXT[data.status];
+        if(label){
+          document.getElementById('callingText').textContent = label(lead.name||'lead');
+        }
+        if(data.status==='idle'){
+          clearInterval(callStatusPoll);
+          bar.classList.remove('show');
+          loadLeads();
+        }
+        if(data.status==='declined' || data.status==='ended'){
+          loadLeads();
+        }
+      }catch(e){
+        // backend hiccup — keep the bar as-is, try again next tick
+      }
+    }, 1200);
+  }
+
   function dismissCalling(){
-    clearTimeout(callingBarTimeout);
+    clearInterval(callStatusPoll);
     document.getElementById('callingBar').classList.remove('show');
   }
 
