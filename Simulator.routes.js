@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { takePendingCall, clearActiveCall } = require('../services/simulator');
+const { takePendingCall, clearActiveCall, getCallStatus, setCallStatus } = require('../services/simulator');
 const { logActivity, updateLeadStatus, setLastAction } = require('../services/leads');
 
 // --------------------------------------------------------
@@ -28,6 +28,7 @@ router.get('/pending-call', (req, res) => {
 router.post('/answer', async (req, res) => {
   try {
     const { lead_id } = req.body;
+    setCallStatus('answered');
     if (lead_id) {
       await logActivity(lead_id, 'call', 'answered', 'Demo call answered');
       await setLastAction(lead_id, 'Demo call answered');
@@ -47,11 +48,13 @@ router.post('/answer', async (req, res) => {
 router.post('/decline', async (req, res) => {
   try {
     const { lead_id } = req.body;
+    setCallStatus('declined');
     if (lead_id) {
       await logActivity(lead_id, 'call', 'no_answer', 'Demo call declined');
       await setLastAction(lead_id, 'Demo call declined');
     }
     clearActiveCall();
+    setTimeout(() => setCallStatus('idle'), 2000); // brief window so the dashboard bar can show "Declined" before resetting
     res.json({ success: true });
   } catch (err) {
     console.error('Simulator decline error:', err.message);
@@ -66,16 +69,28 @@ router.post('/decline', async (req, res) => {
 router.post('/end', async (req, res) => {
   try {
     const { lead_id, duration } = req.body;
+    setCallStatus('ended');
     if (lead_id) {
       await logActivity(lead_id, 'call', 'answered', `Demo call ended — duration ${duration || 0}s`);
       await setLastAction(lead_id, 'Demo call completed');
     }
     clearActiveCall();
+    setTimeout(() => setCallStatus('idle'), 2000);
     res.json({ success: true });
   } catch (err) {
     console.error('Simulator end error:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// --------------------------------------------------------
+// GET /simulator/status
+// Polled by the dashboard's calling bar so it reflects real state —
+// connecting / ringing / answered / declined / ended — instead of
+// fading on a fixed timeout regardless of what actually happened.
+// --------------------------------------------------------
+router.get('/status', (req, res) => {
+  res.json(getCallStatus());
 });
 
 module.exports = router;
