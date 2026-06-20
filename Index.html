@@ -133,6 +133,18 @@
       flex-wrap:wrap;
     }
     .page-head h1{font-size:15px;font-weight:500;}
+
+    .page-tabs{
+      display:flex;gap:4px;padding:0 20px;border-bottom:1px solid var(--border);
+      flex-shrink:0;overflow-x:auto;
+    }
+    .ptab{
+      padding:9px 14px;font-size:12px;font-weight:500;color:var(--muted);
+      background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;
+      transition:all 0.15s;white-space:nowrap;font-family:'Inter',sans-serif;
+    }
+    .ptab:hover{color:var(--text);}
+    .ptab.active{color:var(--text);border-bottom-color:var(--accent);}
     .page-head .sub{font-size:11px;color:var(--muted);margin-top:2px;}
     .head-actions{display:flex;gap:8px;flex-wrap:wrap;}
 
@@ -379,6 +391,18 @@
     }
     .fg input:focus{outline:none;border-color:var(--accent);}
 
+    .settings-form{padding:20px;max-width:480px;}
+    .settings-section{margin-bottom:24px;}
+    .settings-section h3{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;}
+    .settings-row{display:flex;gap:12px;margin-bottom:12px;align-items:flex-end;}
+    .settings-row .fg{flex:1;margin-bottom:0;}
+    .fg select{
+      width:100%;background:var(--bg);border:1px solid var(--border);
+      color:var(--text);padding:8px 10px;border-radius:4px;
+      font-size:13px;font-family:'Inter',sans-serif;
+    }
+    .settings-hint{font-size:11px;color:var(--muted);margin-top:-6px;margin-bottom:12px;}
+
     /* ── MOBILE SIDEBAR TOGGLE ── */
     .menu-btn{
       display:none;background:none;border:none;color:var(--text);
@@ -473,9 +497,21 @@
         <div class="sub" id="clientNiche">—</div>
       </div>
       <div class="head-actions">
-        <button class="btn sm" onclick="if(currentClientId)loadLeads()">↻ Refresh</button>
+        <button class="btn sm" onclick="refreshCurrentPage()">↻ Refresh</button>
       </div>
     </div>
+
+    <!-- PAGE TABS -->
+    <div class="page-tabs">
+      <button class="ptab active" id="tabLeads" onclick="switchPage('leads')">Leads</button>
+      <button class="ptab" id="tabSms" onclick="switchPage('sms')">SMS</button>
+      <button class="ptab" id="tabEmail" onclick="switchPage('email')">Email</button>
+      <button class="ptab" id="tabBookings" onclick="switchPage('bookings')">Bookings</button>
+      <button class="ptab" id="tabSettings" onclick="switchPage('settings')">Settings</button>
+    </div>
+
+    <!-- LEADS PAGE -->
+    <div id="pageLeads">
 
     <!-- STATS -->
     <div class="stats">
@@ -502,6 +538,36 @@
     <!-- LEADS -->
     <div class="leads-wrap" id="leadsWrap">
       <div class="empty"><h3>No client selected</h3><p>Choose a client from the sidebar.</p></div>
+    </div>
+
+    </div>
+
+    <!-- SMS PAGE -->
+    <div id="pageSms" style="display:none;">
+      <div class="leads-wrap" id="smsWrap">
+        <div class="empty"><h3>No client selected</h3><p>Choose a client from the sidebar.</p></div>
+      </div>
+    </div>
+
+    <!-- EMAIL PAGE -->
+    <div id="pageEmail" style="display:none;">
+      <div class="leads-wrap" id="emailWrap">
+        <div class="empty"><h3>No client selected</h3><p>Choose a client from the sidebar.</p></div>
+      </div>
+    </div>
+
+    <!-- BOOKINGS PAGE -->
+    <div id="pageBookings" style="display:none;">
+      <div class="leads-wrap" id="bookingsWrap">
+        <div class="empty"><h3>No client selected</h3><p>Choose a client from the sidebar.</p></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS PAGE -->
+    <div id="pageSettings" style="display:none;">
+      <div class="settings-form" id="settingsWrap">
+        <div class="empty"><h3>No client selected</h3><p>Choose a client from the sidebar.</p></div>
+      </div>
     </div>
 
   </main>
@@ -658,7 +724,207 @@
     document.getElementById('clientName').textContent=c.business_name||c.name;
     document.getElementById('clientNiche').textContent=c.niche||'—';
     document.querySelectorAll('.client-item').forEach(el=>el.classList.toggle('active',el.dataset.id===c.id));
-    await loadLeads();
+    await refreshCurrentPage();
+  }
+
+  /* ── PAGE TABS — Leads / SMS / Email ── */
+  let currentPage='leads';
+
+  function switchPage(page){
+    currentPage=page;
+    document.getElementById('pageLeads').style.display    = page==='leads'    ? '' : 'none';
+    document.getElementById('pageSms').style.display      = page==='sms'      ? '' : 'none';
+    document.getElementById('pageEmail').style.display    = page==='email'    ? '' : 'none';
+    document.getElementById('pageBookings').style.display = page==='bookings' ? '' : 'none';
+    document.getElementById('pageSettings').style.display = page==='settings' ? '' : 'none';
+    document.getElementById('tabLeads').classList.toggle('active', page==='leads');
+    document.getElementById('tabSms').classList.toggle('active', page==='sms');
+    document.getElementById('tabEmail').classList.toggle('active', page==='email');
+    document.getElementById('tabBookings').classList.toggle('active', page==='bookings');
+    document.getElementById('tabSettings').classList.toggle('active', page==='settings');
+    refreshCurrentPage();
+  }
+
+  function refreshCurrentPage(){
+    if(!currentClientId)return;
+    if(currentPage==='leads')    return loadLeads();
+    if(currentPage==='sms')      return loadSmsPage();
+    if(currentPage==='email')    return loadEmailPage();
+    if(currentPage==='bookings') return loadBookingsPage();
+    if(currentPage==='settings') return loadSettingsPage();
+  }
+
+  /* ── SMS PAGE ── */
+  async function loadSmsPage(){
+    const wrap=document.getElementById('smsWrap');
+    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    try{
+      const rows=await api(`/clients/${currentClientId}/activity/sms`);
+      if(!rows||rows.length===0){
+        wrap.innerHTML='<div class="empty"><h3>No SMS sent yet</h3><p>Texts sent to leads will show up here.</p></div>';
+        return;
+      }
+      wrap.innerHTML=rows.map(r=>`
+        <div class="lead-card" style="cursor:default;">
+          <div class="lead-row1">
+            <div class="lead-name-wrap">
+              <div class="lead-name">${r.lead?.name||'Unknown lead'}</div>
+              <div class="lead-phone">${r.lead?.phone||''}</div>
+            </div>
+            <span class="badge ${r.outcome==='sent'?'contacted':'dead'}">${r.outcome}</span>
+          </div>
+          <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
+            <div class="lead-last" style="white-space:normal;">${r.notes||''}</div>
+            <div class="lead-time">${timeAgo(r.created_at)}</div>
+          </div>
+        </div>`).join('');
+    }catch(e){
+      wrap.innerHTML='<div class="empty"><h3>Could not load SMS activity</h3></div>';
+    }
+  }
+
+  /* ── EMAIL PAGE ── */
+  async function loadEmailPage(){
+    const wrap=document.getElementById('emailWrap');
+    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    try{
+      const rows=await api(`/clients/${currentClientId}/activity/email`);
+      if(!rows||rows.length===0){
+        wrap.innerHTML='<div class="empty"><h3>No emails sent yet</h3><p>Nurture and follow-up emails will show up here.</p></div>';
+        return;
+      }
+      wrap.innerHTML=rows.map(r=>`
+        <div class="lead-card" style="cursor:default;">
+          <div class="lead-row1">
+            <div class="lead-name-wrap">
+              <div class="lead-name">${r.lead?.name||'Unknown lead'}</div>
+              <div class="lead-phone">${r.lead?.email||''}</div>
+            </div>
+            <span class="badge ${r.outcome==='sent'?'contacted':'dead'}">${r.outcome}</span>
+          </div>
+          <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
+            <div class="lead-last" style="white-space:normal;">${r.notes||''}</div>
+            <div class="lead-time">${timeAgo(r.created_at)}</div>
+          </div>
+        </div>`).join('');
+    }catch(e){
+      wrap.innerHTML='<div class="empty"><h3>Could not load email activity</h3></div>';
+    }
+  }
+
+  /* ── BOOKINGS PAGE — real booked/rescheduled/cancelled history from n8n ── */
+  async function loadBookingsPage(){
+    const wrap=document.getElementById('bookingsWrap');
+    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    try{
+      const rows=await api(`/clients/${currentClientId}/bookings`);
+      if(!rows||rows.length===0){
+        wrap.innerHTML='<div class="empty"><h3>No bookings yet</h3><p>Confirmed bookings, reschedules, and cancellations will show up here.</p></div>';
+        return;
+      }
+      const eventBadge={booked:'booked',rescheduled:'attempted',cancelled:'dead'};
+      wrap.innerHTML=rows.map(r=>`
+        <div class="lead-card" style="cursor:default;">
+          <div class="lead-row1">
+            <div class="lead-name-wrap">
+              <div class="lead-name">${r.lead?.name||'Unknown lead'}</div>
+              <div class="lead-phone">${r.lead?.phone||''}</div>
+            </div>
+            <span class="badge ${eventBadge[r.event_type]||'new'}">${r.event_type}</span>
+          </div>
+          <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
+            <div class="lead-last" style="white-space:normal;">
+              ${r.appointment_date?('Appointment: '+formatDate(r.appointment_date)):''}
+              ${r.notes?(' · '+r.notes):''}
+            </div>
+            <div class="lead-time">${timeAgo(r.created_at)}</div>
+          </div>
+        </div>`).join('');
+    }catch(e){
+      wrap.innerHTML='<div class="empty"><h3>Could not load bookings</h3></div>';
+    }
+  }
+
+  /* ── SETTINGS PAGE — per-client timezone + follow-up timing ── */
+  const COMMON_TIMEZONES=[
+    'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+    'America/Phoenix','America/Anchorage','Pacific/Honolulu',
+    'America/Toronto','America/Vancouver',
+    'Europe/London','Europe/Dublin',
+  ];
+
+  async function loadSettingsPage(){
+    const wrap=document.getElementById('settingsWrap');
+    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    try{
+      const { timezone, settings } = await api(`/clients/${currentClientId}/settings`);
+
+      const tzOptions = COMMON_TIMEZONES.map(tz=>
+        `<option value="${tz}" ${tz===timezone?'selected':''}>${tz.replace('_',' ')}</option>`
+      ).join('');
+
+      wrap.innerHTML = `
+        <div class="settings-section">
+          <h3>Business Timezone</h3>
+          <div class="fg">
+            <label>Used for all "morning"/"evening" SMS timing for this client's leads</label>
+            <select id="setTimezone">${tzOptions}</select>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Follow-up SMS Timing</h3>
+          <div class="settings-row">
+            <div class="fg"><label>Morning cutoff (hour, 24h)</label><input id="setMorningCutoff" type="number" min="0" max="23" value="${settings.sms_morning_cutoff_hour}"/></div>
+            <div class="fg"><label>Evening cutoff (hour, 24h)</label><input id="setEveningCutoff" type="number" min="0" max="23" value="${settings.sms_evening_cutoff_hour}"/></div>
+          </div>
+          <div class="settings-hint">Calls answered before the morning cutoff get an SMS that evening. Calls answered at or after the evening cutoff get an SMS the next morning. In between, SMS goes out a few hours later the same day.</div>
+
+          <div class="settings-row">
+            <div class="fg"><label>Same-day delay (hours)</label><input id="setSameDayDelay" type="number" min="1" max="12" value="${settings.sms_same_day_delay_hours}"/></div>
+          </div>
+
+          <div class="settings-row">
+            <div class="fg"><label>Evening SMS sent at</label><input id="setAfterMorningTime" type="time" value="${settings.sms_after_morning_time}"/></div>
+            <div class="fg"><label>Next-morning SMS sent at</label><input id="setAfterEveningTime" type="time" value="${settings.sms_after_evening_time}"/></div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Call Follow-up Sequence</h3>
+          <div class="fg"><label>Max attempts before moving to nurture</label><input id="setMaxAttempts" type="number" min="1" max="10" value="${settings.max_hot_attempts}"/></div>
+        </div>
+
+        <button class="btn primary" onclick="saveSettings()">Save Settings</button>
+        <span id="settingsSavedMsg" style="margin-left:10px;font-size:12px;color:var(--booked-t);display:none;">Saved</span>
+      `;
+    }catch(e){
+      wrap.innerHTML='<div class="empty"><h3>Could not load settings</h3></div>';
+    }
+  }
+
+  async function saveSettings(){
+    const followup_settings = {
+      sms_morning_cutoff_hour: parseInt(document.getElementById('setMorningCutoff').value, 10),
+      sms_evening_cutoff_hour: parseInt(document.getElementById('setEveningCutoff').value, 10),
+      sms_same_day_delay_hours: parseInt(document.getElementById('setSameDayDelay').value, 10),
+      sms_after_morning_time: document.getElementById('setAfterMorningTime').value,
+      sms_after_evening_time: document.getElementById('setAfterEveningTime').value,
+      max_hot_attempts: parseInt(document.getElementById('setMaxAttempts').value, 10),
+    };
+    const timezone = document.getElementById('setTimezone').value;
+
+    try{
+      await api(`/clients/${currentClientId}/settings`,{
+        method:'PATCH',
+        body:JSON.stringify({ timezone, followup_settings })
+      });
+      const msg=document.getElementById('settingsSavedMsg');
+      msg.style.display='inline';
+      setTimeout(()=>{msg.style.display='none';},2000);
+    }catch(e){
+      alert('Failed to save settings');
+    }
   }
 
   /* ── LEADS ── */
@@ -756,14 +1022,35 @@
 
   /* ── NEXT STEP — plain-language summary, what the client sees by default ── */
   function nextStepFor(lead){
+    const attempts = lead.attempt_count || 0;
+
     switch(lead.status){
-      case 'new':        return 'Lead will be called shortly.';
-      case 'attempted':  return "We're following up — next attempt is scheduled automatically.";
-      case 'contacted':  return 'Spoke with this lead. Awaiting next action.';
-      case 'booked':     return 'Booked in — nothing to do, appointment is confirmed.';
-      case 'dead':       return 'Marked not interested. No further contact.';
-      case 'nurture':    return 'Not ready yet — staying in touch periodically by email.';
-      default:           return '—';
+      case 'new':
+        return 'Will be called shortly.';
+
+      case 'attempted':
+        // Mirrors the real cron schedule in followUp.js — attempts 1→2,
+        // 2→3, 3→4 — so this says what's actually queued, not a vague
+        // placeholder.
+        if (attempts <= 1) return "No answer yet — we'll call again tomorrow.";
+        if (attempts === 2) return "Still no answer — we'll call and text again tomorrow.";
+        if (attempts === 3) return "One more call and text scheduled, then we'll pause.";
+        return "Final attempt made — moving to occasional email check-ins.";
+
+      case 'contacted':
+        return 'Spoke with this lead — next action depends on how the call went.';
+
+      case 'booked':
+        return 'Booked in — nothing to do, appointment is confirmed.';
+
+      case 'dead':
+        return 'Marked not interested. No further contact.';
+
+      case 'nurture':
+        return "Not ready yet — we'll check in by email every couple of weeks.";
+
+      default:
+        return '—';
     }
   }
 
