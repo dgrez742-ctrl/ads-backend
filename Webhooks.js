@@ -3,15 +3,23 @@ const router = express.Router();
 const { leadExists, createLead, updateLeadStatus, logActivity, getAttemptCount, moveToNurture } = require('../services/leads');
 const { triggerRetellCall } = require('../services/retell');
 const { sendSMS, getSMSMessage } = require('../services/twilio');
+const { queueDemoWebCall } = require('../services/simulator');
 
 // --------------------------------------------------------
 // POST /webhook/meta
-// Receives lead data from Meta via n8n or direct webhook
+// Receives lead data from Meta via n8n or direct webhook.
+//
+// DEMO MODE: if body.demo === true (e.g. from the dashboard's "Inject Lead"
+// button), this NEVER dials a real phone. Instead it queues a Retell WEB
+// CALL for the phone simulator, on a fixed delay. Real Meta leads never
+// set this flag, so production behavior is unchanged.
 // --------------------------------------------------------
 router.post('/meta', async (req, res) => {
   try {
     const body = req.body;
     console.log('Meta webhook received:', JSON.stringify(body));
+
+    const isDemo = body.demo === true;
 
     // Extract lead fields — Meta sends these from the lead form
     const leadData = {
@@ -40,7 +48,14 @@ router.post('/meta', async (req, res) => {
     const lead = await createLead(leadData);
     console.log(`Lead created: ${lead.id}`);
 
-    // Trigger Retell call immediately
+    if (isDemo) {
+      // DEMO PATH — queue a web call for the simulator. No real phone call.
+      queueDemoWebCall(lead);
+      await setLastActionSafe(lead.id, 'Demo call queued');
+      return res.status(200).json({ success: true, leadId: lead.id, demo: true });
+    }
+
+    // PRODUCTION PATH — trigger the real outbound phone call immediately
     const callResult = await triggerRetellCall(lead, 1);
 
     if (callResult.success) {
@@ -60,6 +75,16 @@ router.post('/meta', async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Small helper so a logging failure never breaks the demo-injection response
+async function setLastActionSafe(leadId, text) {
+  try {
+    const { setLastAction } = require('../services/leads');
+    await setLastAction(leadId, text);
+  } catch (err) {
+    console.warn('setLastAction failed (non-fatal):', err.message);
+  }
+}
 
 // --------------------------------------------------------
 // POST /webhook/retell
