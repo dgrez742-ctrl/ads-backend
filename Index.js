@@ -5,6 +5,7 @@ const simulatorRoutes = require('./routes/simulator');
 const { startJobs } = require('./jobs/followUp');
 const supabase = require('./supabase');
 const { triggerRetellCall } = require('./services/retell');
+const { queueDemoWebCall } = require('./services/simulator');
 const {
   getLead,
   updateLeadStatus,
@@ -125,8 +126,19 @@ app.post('/call', async (req, res) => {
     const lead = await getLead(lead_id);
     if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
-    const attemptNumber = await incrementAttemptCount(lead_id);
+    // DEMO LEADS — never dial a real phone number. Route to the same
+    // web-call simulator path used by /webhook/meta when demo:true.
+    // This is the fix: is_demo is now read from the lead itself (saved
+    // at creation time), not re-derived from the original request body,
+    // so this works correctly no matter when "Call Lead" is clicked.
+    if (lead.is_demo) {
+      queueDemoWebCall(lead);
+      await setLastAction(lead_id, 'Demo call queued');
+      return res.json({ success: true, demo: true });
+    }
 
+    // REAL LEADS — fire an actual outbound phone call via Retell
+    const attemptNumber = await incrementAttemptCount(lead_id);
     const result = await triggerRetellCall(lead, attemptNumber);
 
     if (result.success) {
