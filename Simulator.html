@@ -345,8 +345,11 @@
     // The session is fully live by the time the user answers — mic stays
     // muted and we never call startAudioPlayback() until Answer, so
     // nothing is heard in either direction while it's "ringing".
+    answerWasClicked = false;
     connectRetellSilently(data.access_token);
   }
+
+  let answerWasClicked = false; // tracks intent even if it arrives before call_started fires
 
   async function connectRetellSilently(accessToken){
     try{
@@ -355,9 +358,21 @@
         return;
       }
       retellClient = new window.retellClientJsSdk.RetellWebClient();
-      retellClient.on('call_started', () => {
+      retellClient.on('call_started', async () => {
         retellConnected = true;
-        retellClient.mute();
+        // If Answer was already clicked before this fired (the whole point —
+        // answering should feel instant), unmute now instead of staying
+        // silent forever. This is the fix: previously unmuting only
+        // happened inside answerCall() itself, so if call_started hadn't
+        // fired yet at click time, audio never started at all.
+        if(answerWasClicked){
+          try{
+            retellClient.unmute();
+            await retellClient.startAudioPlayback();
+          }catch(e){ console.error('Failed to unmute after late call_started', e); }
+        }else{
+          retellClient.mute();
+        }
       });
       retellClient.on('call_ended', () => {
         retellConnected = false;
@@ -383,6 +398,12 @@
     document.getElementById('callStatusTxt').textContent = 'Connected';
     showScreen('incallScreen');
 
+    // Record intent immediately. If the session is already connected,
+    // unmute right now. If call_started hasn't fired yet, the handler in
+    // connectRetellSilently() will unmute as soon as it does — so audio
+    // always starts one way or the other, instead of silently never
+    // starting when the click happens to land before that event.
+    answerWasClicked = true;
     if(retellClient && retellConnected){
       try{
         retellClient.unmute();
