@@ -39,4 +39,23 @@ function getSMSMessage(lead, attemptNumber) {
   return `Hey ${name}, last follow up on your roofing request. Reply here if you're still looking.`;
 }
 
-module.exports = { sendSMS, getSMSMessage };
+// --------------------------------------------------------
+// POST-ANSWERED-CALL follow-up — different purpose from getSMSMessage
+// above. That one is for "we tried to call and missed you." This one is
+// for "we spoke, but didn't book" — sent later the same day or next
+// morning depending on when the call happened (see Timezone.js). Needs
+// two tones since a message that reads "good morning!" sent at 6pm would
+// look broken.
+// --------------------------------------------------------
+function getFollowUpSmsMessage(lead, variant) {
+  const name = lead.name?.split(' ')[0] || 'there';
+  const offer = lead.offer_seen || 'your request';
+
+  if (variant === 'morning') {
+    return `Morning ${name}! Following up on our call about ${offer} — still want to get something booked in? Happy to sort it whenever works for you.`;
+  }
+  // default to evening tone
+  return `Hey ${name}, following up after our call earlier about ${offer} — still want to get something booked in? Just let me know.`;
+}
+
+module.exports = { sendSMS, getSMSMessage, getFollowUpSmsMessage };
