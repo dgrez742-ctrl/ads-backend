@@ -19,9 +19,9 @@ router.post('/meta', async (req, res) => {
     const body = req.body;
     console.log('Meta webhook received:', JSON.stringify(body));
 
+    // Extract lead fields — Meta sends these from the lead form
     const isDemo = body.demo === true;
 
-    // Extract lead fields — Meta sends these from the lead form
     const leadData = {
       client_id: body.client_id,         // passed by n8n based on which client's form
       campaign_id: body.campaign_id || null,
@@ -29,6 +29,7 @@ router.post('/meta', async (req, res) => {
       phone: body.phone_number || body.phone,
       email: body.email,
       offer_seen: body.ad_name || body.offer_seen || null,
+      is_demo: isDemo,
     };
 
     // Validate we have minimum required fields
