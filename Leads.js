@@ -26,6 +26,7 @@ async function createLead(leadData) {
       status: 'new',
       last_action: 'Lead received',
       attempt_count: 0,
+      is_demo: leadData.is_demo === true,
     }])
     .select()
     .single();
