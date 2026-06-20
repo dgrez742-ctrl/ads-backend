@@ -82,7 +82,10 @@ async function incrementAttemptCount(leadId) {
 }
 
 // Log a contact activity (call, sms, email, voicemail)
-async function logActivity(leadId, activityType, outcome, notes = '') {
+// extra: { transcript, call_summary, sentiment, duration_seconds, retell_call_id }
+// All optional — every existing call site that only passes 4 args keeps
+// working exactly as before.
+async function logActivity(leadId, activityType, outcome, notes = '', extra = {}) {
   const { error } = await supabase
     .from('ldm_contact_activity')
     .insert([{
@@ -90,6 +93,7 @@ async function logActivity(leadId, activityType, outcome, notes = '') {
       activity_type: activityType,
       outcome,
       notes,
+      ...extra,
     }]);
 
   if (error) throw error;
@@ -149,10 +153,12 @@ async function getNurtureLeadsDue() {
   return data || [];
 }
 
-// Update nurture sequence — set next send date based on step
-async function updateNurtureStep(nurtureId, currentStep) {
-  const intervals = [7, 7, 7, 14, 30, 30, 30];
-  const daysUntilNext = intervals[currentStep] || 30;
+// Update nurture sequence — set next send date based on step.
+// clientSettings is optional; falls back to the same defaults as before
+// if not provided, so existing call sites don't break.
+async function updateNurtureStep(nurtureId, currentStep, clientSettings) {
+  const intervals = (clientSettings && clientSettings.nurture_intervals_days) || [7, 7, 7, 14, 30, 30, 30];
+  const daysUntilNext = intervals[currentStep] || intervals[intervals.length - 1] || 30;
   const nextSendAt = new Date(Date.now() + daysUntilNext * 24 * 60 * 60 * 1000).toISOString();
 
   const { error } = await supabase
@@ -185,6 +191,170 @@ async function moveToNurture(leadId) {
   if (error) throw error;
 }
 
+// --------------------------------------------------------
+// CLIENT SETTINGS — timezone + follow-up timing, used by the SMS
+// scheduling logic and nurture sequencing. Falls back to defaults if a
+// client somehow has no row yet (shouldn't happen since the column has
+// a DB default, but defensive either way).
+// --------------------------------------------------------
+const { mergeSettings } = require('./timezone');
+
+async function getClientSettings(clientId) {
+  const { data, error } = await supabase
+    .from('ldm_clients')
+    .select('timezone, followup_settings')
+    .eq('id', clientId)
+    .single();
+
+  if (error || !data) {
+    return { timezone: 'America/New_York', settings: mergeSettings({}) };
+  }
+
+  return {
+    timezone: data.timezone || 'America/New_York',
+    settings: mergeSettings(data.followup_settings),
+  };
+}
+
+async function updateClientSettings(clientId, { timezone, followup_settings }) {
+  const update = {};
+  if (timezone) update.timezone = timezone;
+  if (followup_settings) update.followup_settings = followup_settings;
+
+  const { data, error } = await supabase
+    .from('ldm_clients')
+    .update(update)
+    .eq('id', clientId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Record the most recent answered-call timestamp on the lead itself.
+// Edge case fix: SMS timing must key off the MOST RECENT answered call,
+// not the first one — a lead called twice in one day should have its
+// follow-up timing based on the second call, not stale data from the
+// first.
+async function setLastAnsweredCallAt(leadId, whenUtc = new Date()) {
+  const { error } = await supabase
+    .from('ldm_leads')
+    .update({ last_answered_call_at: whenUtc.toISOString() })
+    .eq('id', leadId);
+
+  if (error) throw error;
+}
+
+// --------------------------------------------------------
+// SCHEDULED SMS — real, cancellable rows instead of a fire-and-forget
+// setTimeout. A booking event can explicitly cancel a pending row;
+// the cron job picks up anything due.
+// --------------------------------------------------------
+
+async function scheduleSms(leadId, message, variant, sendAtUtc) {
+  const { data, error } = await supabase
+    .from('ldm_scheduled_sms')
+    .insert([{
+      lead_id: leadId,
+      message,
+      variant,
+      scheduled_for: sendAtUtc.toISOString(),
+      status: 'scheduled',
+    }])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Cancel any still-pending scheduled SMS for a lead — called when a
+// booking event comes in, so a lead who just booked doesn't also get a
+// "still want to book?" text a few hours later.
+async function cancelScheduledSmsForLead(leadId, reason) {
+  const { error } = await supabase
+    .from('ldm_scheduled_sms')
+    .update({ status: 'cancelled', cancelled_reason: reason })
+    .eq('lead_id', leadId)
+    .eq('status', 'scheduled');
+
+  if (error) throw error;
+}
+
+// Get every scheduled SMS that's actually due — called by the cron job.
+async function getDueScheduledSms() {
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from('ldm_scheduled_sms')
+    .select('*, ldm_leads(*)')
+    .eq('status', 'scheduled')
+    .lte('scheduled_for', now);
+
+  if (error) return [];
+  return data || [];
+}
+
+async function markScheduledSmsSent(id) {
+  const { error } = await supabase
+    .from('ldm_scheduled_sms')
+    .update({ status: 'sent', sent_at: new Date().toISOString() })
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+async function markScheduledSmsSkipped(id, reason) {
+  const { error } = await supabase
+    .from('ldm_scheduled_sms')
+    .update({ status: 'skipped', cancelled_reason: reason })
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+// --------------------------------------------------------
+// BOOKING EVENTS — from the n8n workflow, the one place that genuinely
+// knows when book_appointment / reschedule_appointment /
+// cancel_appointment actually succeeded.
+// --------------------------------------------------------
+
+async function recordBookingEvent(leadId, eventType, appointmentDate, notes) {
+  const { error } = await supabase
+    .from('ldm_booking_events')
+    .insert([{
+      lead_id: leadId,
+      event_type: eventType,
+      appointment_date: appointmentDate || null,
+      notes: notes || null,
+    }]);
+
+  if (error) throw error;
+}
+
+async function getBookingEventsForClient(clientId) {
+  const { data: leads, error: leadsErr } = await supabase
+    .from('ldm_leads')
+    .select('id, name, phone')
+    .eq('client_id', clientId);
+
+  if (leadsErr) return [];
+  const leadIds = (leads || []).map(l => l.id);
+  if (leadIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('ldm_booking_events')
+    .select('*')
+    .in('lead_id', leadIds)
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+
+  const leadMap = Object.fromEntries(leads.map(l => [l.id, l]));
+  return (data || []).map(row => ({ ...row, lead: leadMap[row.lead_id] || null }));
+}
+
 module.exports = {
   leadExists,
   createLead,
@@ -199,4 +369,14 @@ module.exports = {
   getNurtureLeadsDue,
   updateNurtureStep,
   moveToNurture,
+  getClientSettings,
+  updateClientSettings,
+  setLastAnsweredCallAt,
+  scheduleSms,
+  cancelScheduledSmsForLead,
+  getDueScheduledSms,
+  markScheduledSmsSent,
+  markScheduledSmsSkipped,
+  recordBookingEvent,
+  getBookingEventsForClient,
 };
