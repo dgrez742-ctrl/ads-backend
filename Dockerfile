@@ -15,6 +15,7 @@ COPY Simulator.routes.js ./src/routes/simulator.js
 COPY Retell.js ./src/services/retell.js
 COPY Twilio.js ./src/services/twilio.js
 COPY Leads.js ./src/services/leads.js
+COPY Timezone.js ./src/services/timezone.js
 COPY Simulator.js ./src/services/simulator.js
 COPY FollowUp.js ./src/jobs/followUp.js
 COPY Index.html ./Index.html
