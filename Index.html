@@ -325,6 +325,7 @@
 
     .activity-log{margin-top:16px;}
     .activity-log h3{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;}
+    .sim-btn-row{display:flex;flex-wrap:wrap;gap:8px;}
     .act-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;}
     .act-item:last-child{border-bottom:none;}
     .act-type{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent);min-width:44px;text-transform:uppercase;padding-top:1px;}
@@ -520,6 +521,16 @@
         <h3>Activity Log</h3>
         <div id="pActivity"><div style="color:var(--muted);font-size:12px;">No activity yet.</div></div>
       </div>
+      <div class="activity-log">
+        <h3>Simulate Outcome <span style="color:var(--muted);font-weight:400;font-size:11px;">(testing only)</span></h3>
+        <div class="sim-btn-row">
+          <button class="btn sm" onclick="simulateOutcome('no-answer')">No Answer</button>
+          <button class="btn sm" onclick="simulateOutcome('voicemail')">Voicemail</button>
+          <button class="btn sm" onclick="simulateOutcome('interested')">Interested / Booked</button>
+          <button class="btn sm" onclick="simulateOutcome('not-interested')">Not Interested</button>
+          <button class="btn sm" onclick="simulateOutcome('exhaust-sequence')">Exhaust → Nurture</button>
+        </div>
+      </div>
     </div>
     <div class="panel-footer">
       <button class="btn call" onclick="callLead()">📞 Call Lead</button>
@@ -554,6 +565,10 @@
       <div class="fg"><label>Phone</label><input id="iPhone" placeholder="+1234567890"/></div>
       <div class="fg"><label>Email</label><input id="iEmail" placeholder="john@example.com"/></div>
       <div class="fg"><label>Offer Seen</label><input id="iOffer" placeholder="Free roofing inspection"/></div>
+      <div class="fg" style="display:flex;align-items:center;gap:8px;flex-direction:row;">
+        <input type="checkbox" id="iDemo" style="width:auto;" checked/>
+        <label for="iDemo" style="margin:0;font-size:12px;color:var(--muted);">Demo Lead (rings the phone simulator — never dials a real number)</label>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="closeModal('injectModal')">Cancel</button>
@@ -717,6 +732,7 @@
   }
 
   /* ── CALL LEAD ── */
+  let callingBarTimeout=null;
   async function callLead(){
     const lead=allLeads.find(l=>l.id===currentLeadId);
     if(!lead)return;
@@ -724,13 +740,43 @@
     const bar=document.getElementById('callingBar');
     document.getElementById('callingText').textContent=`Calling ${lead.name||'lead'}...`;
     bar.classList.add('show');
+
+    // Hard timeout backstop — never let the bar sit forever even if the
+    // request hangs or the response shape changes.
+    clearTimeout(callingBarTimeout);
+    callingBarTimeout=setTimeout(()=>{
+      bar.classList.remove('show');
+    },15000);
+
     try{
       await api('/call',{method:'POST',body:JSON.stringify({lead_id:currentLeadId})});
     }catch(e){
       console.error(e);
+    }finally{
+      // The /call endpoint only triggers the call — it doesn't wait for the
+      // call to finish — so once it resolves (success or fail) the "Calling..."
+      // state has served its purpose. Give the user a brief moment to read it.
+      clearTimeout(callingBarTimeout);
+      setTimeout(()=>{bar.classList.remove('show');},1200);
+      loadLeads();
     }
   }
-  function dismissCalling(){document.getElementById('callingBar').classList.remove('show');}
+  function dismissCalling(){
+    clearTimeout(callingBarTimeout);
+    document.getElementById('callingBar').classList.remove('show');
+  }
+
+  /* ── SIMULATE OUTCOME (testing only) ── */
+  async function simulateOutcome(kind){
+    if(!currentLeadId)return;
+    try{
+      await api(`/simulate/${kind}`,{method:'POST',body:JSON.stringify({lead_id:currentLeadId})});
+      await loadLeads();
+      await openLead(currentLeadId);
+    }catch(e){
+      alert('Failed to simulate outcome');
+    }
+  }
 
   /* ── FILTER ── */
   function setFilter(f,btn){
@@ -772,7 +818,8 @@
           name:document.getElementById('iName').value||'Test Lead',
           phone:document.getElementById('iPhone').value||'+1234567890',
           email:document.getElementById('iEmail').value||'test@example.com',
-          offer_seen:document.getElementById('iOffer').value||'Free roofing inspection'
+          offer_seen:document.getElementById('iOffer').value||'Free roofing inspection',
+          demo:document.getElementById('iDemo').checked
         })
       });
       closeModal('injectModal');
@@ -783,16 +830,30 @@
   /* ── UTILS ── */
   function closeModal(id){document.getElementById(id).classList.remove('open');}
 
+  // Supabase/Postgres can return timestamps with no UTC marker (no trailing
+  // "Z" and no +hh:mm offset) if a column is "timestamp without time zone".
+  // new Date('2026-06-19T10:49:00') with no offset is parsed by the browser
+  // as LOCAL time, not UTC — which silently shifts every time by your
+  // timezone offset (e.g. "1 hour ago" when it was really 3 minutes ago).
+  // This guarantees we always treat naive timestamps as UTC, since that's
+  // what the backend always intends (see new Date().toISOString() usage
+  // throughout the server code).
+  function parseUtc(iso){
+    if(!iso)return null;
+    const hasOffset=/Z$|[+-]\d{2}:?\d{2}$/.test(iso);
+    return new Date(hasOffset?iso:iso+'Z');
+  }
+
   function formatDate(iso){
     if(!iso)return'—';
-    const d=new Date(iso);
+    const d=parseUtc(iso);
     return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'})+' '+
            d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
   }
 
   function timeAgo(iso){
     if(!iso)return'—';
-    const diff=Date.now()-new Date(iso).getTime();
+    const diff=Date.now()-parseUtc(iso).getTime();
     const m=Math.floor(diff/60000);
     if(m<1)return'just now';
     if(m<60)return`${m}m ago`;
