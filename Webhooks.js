@@ -1,9 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { leadExists, createLead, updateLeadStatus, logActivity, getAttemptCount, moveToNurture } = require('../services/leads');
+const {
+  leadExists, createLead, updateLeadStatus, logActivity, getAttemptCount, moveToNurture,
+  getLead, setLastAnsweredCallAt, getClientSettings, scheduleSms,
+  recordBookingEvent, cancelScheduledSmsForLead,
+} = require('../services/leads');
 const { triggerRetellCall } = require('../services/retell');
-const { sendSMS, getSMSMessage } = require('../services/twilio');
+const { sendSMS, getSMSMessage, getFollowUpSmsMessage } = require('../services/twilio');
 const { queueDemoWebCall } = require('../services/simulator');
+const { computeSmsSendTime } = require('../services/timezone');
 
 // --------------------------------------------------------
 // POST /webhook/meta
@@ -106,7 +111,15 @@ router.post('/retell', async (req, res) => {
       return res.status(400).json({ error: 'Missing lead_id' });
     }
 
-    // Map Retell outcome to our status
+    // Map Retell outcome to our status.
+    //
+    // IMPORTANT: this no longer guesses "booked" by string-matching the
+    // call summary for the word "booked" — that was fragile (e.g. "asked
+    // about booking but didn't book" would have matched). Booking status
+    // now comes ONLY from /webhook/booking-event, fired by the n8n
+    // workflow at the exact moment book_appointment actually succeeds —
+    // that's the one place that genuinely knows. This handler just
+    // determines whether the call was answered at all.
     let newStatus = 'attempted';
     let activityOutcome = 'no_answer';
     let notes = '';
@@ -115,12 +128,7 @@ router.post('/retell', async (req, res) => {
       const summary = callAnalysis.call_summary?.toLowerCase() || '';
       const userSentiment = callAnalysis.user_sentiment?.toLowerCase() || '';
 
-      if (summary.includes('booked') || summary.includes('appointment')) {
-        newStatus = 'booked';
-        activityOutcome = 'answered';
-        notes = 'Booked via Retell';
-
-      } else if (summary.includes('not interested') || userSentiment === 'negative') {
+      if (summary.includes('not interested') || userSentiment === 'negative') {
         newStatus = 'dead';
         activityOutcome = 'answered';
         notes = 'Not interested';
@@ -146,6 +154,20 @@ router.post('/retell', async (req, res) => {
     // Update lead status
     await updateLeadStatus(leadId, newStatus);
     await logActivity(leadId, 'call', activityOutcome, notes);
+
+    // Answered and still open (not dead, not asked to call back later,
+    // and crucially not already booked) — schedule the timezone-aware
+    // follow-up SMS using the same logic as the demo simulator path.
+    if (newStatus === 'contacted') {
+      await setLastAnsweredCallAt(leadId, new Date());
+      const lead = await getLead(leadId);
+      if (lead.status !== 'booked') {
+        const { timezone, settings } = await getClientSettings(lead.client_id);
+        const { variant, sendAt } = computeSmsSendTime(new Date(), timezone, settings);
+        const message = getFollowUpSmsMessage(lead, variant);
+        await scheduleSms(leadId, message, variant, sendAt);
+      }
+    }
 
     // If no answer and not dead — send SMS as next touch
     if (newStatus === 'attempted') {
@@ -181,4 +203,140 @@ router.post('/retell', async (req, res) => {
   }
 });
 
+// --------------------------------------------------------
+// POST /webhook/booking-event
+// Called by the n8n workflow at the moment book_appointment,
+// reschedule_appointment, or cancel_appointment actually succeeds.
+// This is the ONLY source of truth for booking status — not Retell's
+// call summary text, which is fragile to guess from. n8n is the one
+// system that genuinely knows when a booking really went through.
+//
+// Body: { lead_id, event_type: 'booked'|'rescheduled'|'cancelled',
+//          appointment_date, notes }
+// If lead_id isn't available to n8n, phone can be passed instead and
+// matched against the most recent lead with that number.
+// --------------------------------------------------------
+router.post('/booking-event', async (req, res) => {
+  try {
+    const { lead_id, phone, event_type, appointment_date, notes } = req.body;
+
+    if (!event_type || !['booked', 'rescheduled', 'cancelled'].includes(event_type)) {
+      return res.status(400).json({ error: 'event_type must be booked, rescheduled, or cancelled' });
+    }
+
+    let resolvedLeadId = lead_id;
+    if (!resolvedLeadId && phone) {
+      const supabase = require('../supabase');
+      const { data } = await supabase
+        .from('ldm_leads')
+        .select('id')
+        .eq('phone', phone)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      resolvedLeadId = data?.id || null;
+    }
+
+    if (!resolvedLeadId) {
+      console.warn('booking-event: could not resolve a lead_id from', { lead_id, phone });
+      return res.status(400).json({ error: 'Could not resolve lead_id' });
+    }
+
+    await recordBookingEvent(resolvedLeadId, event_type, appointment_date, notes);
+
+    if (event_type === 'booked' || event_type === 'rescheduled') {
+      await updateLeadStatus(resolvedLeadId, 'booked', {
+        last_action: event_type === 'booked' ? 'Booked' : 'Rescheduled',
+        booked: true,
+        booking_date: appointment_date || null,
+      });
+      // The whole point of this endpoint — a lead who just booked should
+      // never also get a "still want to book?" SMS sitting in the queue.
+      await cancelScheduledSmsForLead(resolvedLeadId, `Cancelled — lead ${event_type}`);
+
+    } else if (event_type === 'cancelled') {
+      // Cancelled means there's no longer anything on the calendar — put
+      // the lead back into an active state rather than leaving it stuck
+      // marked "booked" with nothing actually booked.
+      await updateLeadStatus(resolvedLeadId, 'contacted', {
+        last_action: 'Booking cancelled',
+        booked: false,
+      });
+    }
+
+    return res.status(200).json({ success: true, lead_id: resolvedLeadId });
+
+  } catch (err) {
+    console.error('booking-event webhook error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
+
+// --------------------------------------------------------
+// POST /webhook/retell-call-details
+// Receives Retell's call_ended and call_analyzed events.
+// Fires for BOTH real outbound calls and demo web calls — separate from
+// the /retell handler above, which only drives the no-answer/SMS/nurture
+// follow-up logic. This one's only job is capturing what actually
+// happened on the call (transcript, summary, sentiment, duration) so the
+// dashboard can show real content instead of just an outcome label.
+//
+// Set this as the Agent-Level Webhook URL in the Retell dashboard:
+//   https://<your-railway-url>/webhook/retell-call-details
+//
+// Note: Retell's recording_url is only valid for 10 minutes after the
+// call ends — if recordings need to be kept, they must be downloaded and
+// re-hosted within that window. Not done here; out of scope for now.
+// --------------------------------------------------------
+router.post('/retell-call-details', async (req, res) => {
+  try {
+    const { event, call } = req.body;
+
+    if (!call || !call.call_id) {
+      return res.status(200).json({ received: true }); // nothing usable, ack anyway so Retell doesn't retry
+    }
+
+    // The lead_id was passed in as a dynamic variable when the call was
+    // created (see services/retell.js and services/simulator.js), so it
+    // comes back to us inside the call object.
+    const leadId =
+      call.retell_llm_dynamic_variables?.lead_id ||
+      call.metadata?.lead_id ||
+      null;
+
+    if (!leadId) {
+      console.warn(`retell-call-details: no lead_id on call ${call.call_id}, skipping`);
+      return res.status(200).json({ received: true });
+    }
+
+    if (event === 'call_ended') {
+      const durationSeconds = call.duration_ms ? Math.round(call.duration_ms / 1000) : null;
+      await logActivity(leadId, 'call', 'answered', 'Call ended', {
+        retell_call_id: call.call_id,
+        transcript: call.transcript || null,
+        duration_seconds: durationSeconds,
+      });
+    }
+
+    if (event === 'call_analyzed') {
+      const summary = call.call_analysis?.call_summary || null;
+      const sentiment = call.call_analysis?.user_sentiment || null;
+      await logActivity(leadId, 'call', 'answered', 'Call analyzed', {
+        retell_call_id: call.call_id,
+        call_summary: summary,
+        sentiment: sentiment,
+      });
+    }
+
+    return res.status(200).json({ received: true });
+
+  } catch (err) {
+    console.error('retell-call-details webhook error:', err.message);
+    // Still return 200 — Retell retries up to 3 times on non-2xx, and a
+    // transient DB error shouldn't cause duplicate retries for something
+    // that's only ever logging, not driving status transitions.
+    return res.status(200).json({ received: true, error: err.message });
+  }
+});
