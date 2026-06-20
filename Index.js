@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const webhookRoutes = require('./routes/webhooks');
+const simulatorRoutes = require('./routes/simulator');
 const { startJobs } = require('./jobs/followUp');
 const supabase = require('./supabase');
 const { triggerRetellCall } = require('./services/retell');
@@ -27,6 +28,9 @@ app.use((req, res, next) => {
 
 // ---- WEBHOOKS (Meta + Retell) ----
 app.use('/webhook', webhookRoutes);
+
+// ---- PHONE SIMULATOR (demo only — web calls, never dials a real number) ----
+app.use('/simulator', simulatorRoutes);
 
 // ================================================
 // CLIENTS
@@ -224,9 +228,21 @@ app.post('/test/lead', async (req, res) => {
     phone: req.body.phone || '+1234567890',
     email: req.body.email || 'test@example.com',
     offer_seen: req.body.offer_seen || 'Free roofing inspection',
+    demo: req.body.demo === true,
   };
+  // Forward into the real /webhook/meta handler by re-invoking it as an
+  // internal request, rather than calling .handle() (which doesn't exist
+  // on an Express router and would throw).
+  req.url = '/meta';
   req.body = fakeLead;
-  return require('./routes/webhooks').handle(req, res);
+  return webhookRoutes(req, res, (err) => {
+    if (err) res.status(500).json({ error: err.message });
+  });
+});
+
+// ---- SERVE PHONE SIMULATOR ----
+app.get('/simulator-screen', (req, res) => {
+  res.sendFile('/app/simulator.html');
 });
 
 // ---- SERVE DASHBOARD ----
