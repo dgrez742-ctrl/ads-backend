@@ -8,23 +8,28 @@ const axios = require('axios');
 // (RETELL_AGENT_ID_1 / RETELL_API_KEY_1), purely for demo purposes.
 // --------------------------------------------------------
 
-const DEMO_RING_DELAY_MS = 10 * 1000; // fixed 10s between lead injection and ring
-
 // In-memory queue — single demo session at a time is enough for live demos.
 // Not persisted; resets if the server restarts. That's intentional — this is
 // demo-only state, not real lead data (real lead data still lives in Supabase).
-let pendingCall = null;   // { lead, access_token, call_id, queued_at }
+let pendingCall = null;   // { lead, access_token, call_id, queued_at } — set only once Retell confirms the session exists
 let activeCall = null;    // the call currently answered/in-progress (for logging only)
+let callStatus = 'idle';  // idle | connecting | ringing | answered | declined | ended | failed
+                          // exposed via getCallStatus() so the dashboard's calling bar
+                          // reflects real state instead of guessing on a timer.
 
 // --------------------------------------------------------
-// Queue a demo call — called by /webhook/meta when demo:true
-// Waits DEMO_RING_DELAY_MS, then creates a Retell web call and
-// makes it available to the simulator via getPendingCall().
+// Queue a demo call — called by /webhook/meta and /call when demo/is_demo.
+// No artificial delay: creates the Retell web call immediately, and only
+// once Retell actually confirms the session exists does this become
+// "pending" for the simulator to pick up on its next poll. That poll
+// interval (~1.5s) is the only "ring delay" — it's a side effect of
+// genuine readiness, not a guess.
 // --------------------------------------------------------
 function queueDemoWebCall(lead) {
-  console.log(`Demo call queued for lead ${lead.id} — ringing in ${DEMO_RING_DELAY_MS / 1000}s`);
+  callStatus = 'connecting';
+  console.log(`Demo call queued for lead ${lead.id} — creating Retell web call session...`);
 
-  setTimeout(async () => {
+  (async () => {
     try {
       const webCall = await createRetellWebCall(lead);
       pendingCall = {
@@ -38,11 +43,13 @@ function queueDemoWebCall(lead) {
         call_id: webCall.call_id,
         queued_at: new Date().toISOString(),
       };
+      callStatus = 'ringing';
       console.log(`Demo web call ready for lead ${lead.id} — call_id ${webCall.call_id}`);
     } catch (err) {
       // axios hides the real reason behind a generic "Request failed with
       // status code 400" message — log the actual response body from
       // Retell so we can see the real validation error instead of guessing.
+      callStatus = 'failed';
       if (err.response) {
         console.error(
           `Failed to create demo web call for lead ${lead.id} — Retell responded ${err.response.status}:`,
@@ -52,7 +59,7 @@ function queueDemoWebCall(lead) {
         console.error(`Failed to create demo web call for lead ${lead.id}:`, err.message);
       }
     }
-  }, DEMO_RING_DELAY_MS);
+  })();
 }
 
 // --------------------------------------------------------
@@ -167,10 +174,27 @@ function clearActiveCall() {
   activeCall = null;
 }
 
+// --------------------------------------------------------
+// Status the dashboard polls so its "calling..." bar reflects what's
+// actually happening, instead of fading on a fixed timeout regardless
+// of real progress.
+// --------------------------------------------------------
+function getCallStatus() {
+  return {
+    status: callStatus,
+    lead_id: activeCall ? activeCall.lead.id : (pendingCall ? pendingCall.lead.id : null),
+  };
+}
+
+function setCallStatus(status) {
+  callStatus = status;
+}
+
 module.exports = {
   queueDemoWebCall,
   takePendingCall,
   getActiveLeadId,
   clearActiveCall,
-  DEMO_RING_DELAY_MS,
+  getCallStatus,
+  setCallStatus,
 };
