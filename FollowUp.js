@@ -1,8 +1,62 @@
 const cron = require('node-cron');
-const { getLeadsForFollowUp, getStalledLeads, getNurtureLeadsDue, updateLeadStatus, logActivity, getAttemptCount, moveToNurture, updateNurtureStep } = require('../services/leads');
+const {
+  getLeadsForFollowUp, getStalledLeads, getNurtureLeadsDue, updateLeadStatus, logActivity,
+  getAttemptCount, moveToNurture, updateNurtureStep, getClientSettings,
+  getDueScheduledSms, markScheduledSmsSent, markScheduledSmsSkipped, getLead,
+} = require('../services/leads');
 const { triggerRetellCall } = require('../services/retell');
 const { sendSMS, getSMSMessage } = require('../services/twilio');
+const { lateSendDecision } = require('../services/timezone');
 const supabase = require('../supabase');
+
+// --------------------------------------------------------
+// SCHEDULED SMS JOB — runs every 15 minutes
+// Sends any post-answered-call follow-up SMS that's now due (see
+// Timezone.js for the timing rule, Simulator.routes.js and Webhooks.js
+// for where these get scheduled). Handles the missed-cron-window edge
+// case: send late if it's not too late, skip rather than send something
+// stale if it's very late.
+// --------------------------------------------------------
+async function runScheduledSmsJob() {
+  console.log('Checking for due scheduled SMS...');
+
+  try {
+    const due = await getDueScheduledSms();
+
+    for (const row of due) {
+      const lead = row.ldm_leads;
+      if (!lead) {
+        await markScheduledSmsSkipped(row.id, 'Lead no longer exists');
+        continue;
+      }
+
+      // Re-check booked status right before sending — covers the case
+      // where a booking event arrived between when this was scheduled
+      // and now, in the small window before the cancel had a chance to
+      // run, or if cancellation itself failed for some reason.
+      const freshLead = await getLead(lead.id);
+      if (freshLead.status === 'booked') {
+        await markScheduledSmsSkipped(row.id, 'Lead booked before send time');
+        continue;
+      }
+
+      const decision = lateSendDecision(new Date(row.scheduled_for));
+      if (decision.action === 'skip') {
+        console.log(`Scheduled SMS ${row.id} skipped — ${decision.reason}`);
+        await markScheduledSmsSkipped(row.id, decision.reason);
+        continue;
+      }
+
+      const result = await sendSMS(lead.phone, row.message);
+      await logActivity(lead.id, 'sms', result.success ? 'sent' : 'bounced', row.message);
+      await markScheduledSmsSent(row.id);
+      console.log(`Scheduled SMS ${row.id} sent to lead ${lead.id} (${decision.action})`);
+    }
+
+  } catch (err) {
+    console.error('Scheduled SMS job error:', err.message);
+  }
+}
 
 // --------------------------------------------------------
 // FOLLOW UP JOB — runs every hour
@@ -111,8 +165,11 @@ async function runNurtureJob() {
       // Just log it here for now — connect your emailer later
       await logActivity(lead.id, 'email', 'sent', `Nurture email step ${step}`);
 
-      // Update nurture to next step
-      await updateNurtureStep(item.id, step);
+      // Update nurture to next step — uses the client's own configured
+      // intervals (settings page) instead of the same fixed schedule for
+      // every client.
+      const { settings } = await getClientSettings(lead.client_id);
+      await updateNurtureStep(item.id, step, settings);
     }
 
   } catch (err) {
@@ -129,6 +186,13 @@ function startJobs() {
 
   // Stalled leads check — every 30 minutes
   cron.schedule('*/30 * * * *', runStalledLeadsJob);
+
+  // Scheduled SMS — every 15 minutes (tighter than the hourly follow-up
+  // job since these have specific wall-clock send times to hit, e.g.
+  // "6:00pm" or "10:30am" — checking only once an hour could miss the
+  // window by up to 59 minutes on its own, compounding with the
+  // late-send tolerance already built into the job itself)
+  cron.schedule('*/15 * * * *', runScheduledSmsJob);
 
   // Nurture — once a day at 9am
   cron.schedule('0 9 * * *', runNurtureJob);
