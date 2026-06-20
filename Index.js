@@ -13,6 +13,9 @@ const {
   incrementAttemptCount,
   logActivity,
   moveToNurture,
+  getClientSettings,
+  updateClientSettings,
+  getBookingEventsForClient,
 } = require('./services/leads');
 const { sendSMS, getSMSMessage } = require('./services/twilio');
 
@@ -114,6 +117,104 @@ app.get('/leads/:id/activity', async (req, res) => {
 });
 
 // ================================================
+// SMS / EMAIL ACTIVITY — admin-level pages
+// Returns every SMS or email activity row for a client's leads, with the
+// lead's name/phone attached, so the SMS and Email pages can show a flat
+// timeline without needing N+1 requests per lead.
+// ================================================
+
+app.get('/clients/:id/activity/sms', async (req, res) => {
+  try {
+    const { data: leads, error: leadsErr } = await supabase
+      .from('ldm_leads')
+      .select('id, name, phone')
+      .eq('client_id', req.params.id);
+    if (leadsErr) throw leadsErr;
+
+    const leadIds = (leads || []).map(l => l.id);
+    if (leadIds.length === 0) return res.json([]);
+
+    const { data, error } = await supabase
+      .from('ldm_contact_activity')
+      .select('*')
+      .in('lead_id', leadIds)
+      .eq('activity_type', 'sms')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+
+    const leadMap = Object.fromEntries(leads.map(l => [l.id, l]));
+    const enriched = (data || []).map(row => ({ ...row, lead: leadMap[row.lead_id] || null }));
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/clients/:id/activity/email', async (req, res) => {
+  try {
+    const { data: leads, error: leadsErr } = await supabase
+      .from('ldm_leads')
+      .select('id, name, phone, email')
+      .eq('client_id', req.params.id);
+    if (leadsErr) throw leadsErr;
+
+    const leadIds = (leads || []).map(l => l.id);
+    if (leadIds.length === 0) return res.json([]);
+
+    const { data, error } = await supabase
+      .from('ldm_contact_activity')
+      .select('*')
+      .in('lead_id', leadIds)
+      .eq('activity_type', 'email')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+
+    const leadMap = Object.fromEntries(leads.map(l => [l.id, l]));
+    const enriched = (data || []).map(row => ({ ...row, lead: leadMap[row.lead_id] || null }));
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================================================
+// CLIENT SETTINGS — timezone + follow-up timing
+// ================================================
+
+app.get('/clients/:id/settings', async (req, res) => {
+  try {
+    const result = await getClientSettings(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/clients/:id/settings', async (req, res) => {
+  try {
+    const { timezone, followup_settings } = req.body;
+    const data = await updateClientSettings(req.params.id, { timezone, followup_settings });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================================================
+// BOOKING EVENTS — real booked/rescheduled/cancelled history,
+// fed by the n8n workflow via /webhook/booking-event
+// ================================================
+
+app.get('/clients/:id/bookings', async (req, res) => {
+  try {
+    const data = await getBookingEventsForClient(req.params.id);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================================================
 // CALL LEAD — triggered by the dashboard "Call Lead" button
 // Pulls full lead context and fires Retell with it
 // ================================================
@@ -132,8 +233,14 @@ app.post('/call', async (req, res) => {
     // at creation time), not re-derived from the original request body,
     // so this works correctly no matter when "Call Lead" is clicked.
     if (lead.is_demo) {
+      // BUG FIX: this branch returned early without ever calling
+      // incrementAttemptCount — every demo call was logged as activity
+      // but never counted, which is why attempt_count and the dashboard
+      // stats (e.g. "2 attempted" after 3 real demo calls) didn't match
+      // what actually happened.
+      await incrementAttemptCount(lead_id);
       queueDemoWebCall(lead);
-      await setLastAction(lead_id, 'Demo call queued');
+      await setLastAction(lead_id, 'Call in progress');
       return res.json({ success: true, demo: true });
     }
 
@@ -145,8 +252,8 @@ app.post('/call', async (req, res) => {
       await updateLeadStatus(lead_id, 'attempted', { last_action: 'Calling now' });
       await logActivity(lead_id, 'call', 'no_answer', `Manual call triggered — attempt ${attemptNumber}`);
     } else {
-      await setLastAction(lead_id, 'Call failed to trigger');
-      await logActivity(lead_id, 'call', 'bounced', result.error || 'Call failed to trigger');
+      await setLastAction(lead_id, "Couldn't reach — will retry");
+      await logActivity(lead_id, 'call', 'bounced', result.error || 'Call failed to trigger');  // internal note stays technical for debugging
     }
 
     res.json({ success: result.success, callId: result.callId || null });
