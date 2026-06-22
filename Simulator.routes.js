@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { takePendingCall, clearActiveCall, getCallStatus, setCallStatus } = require('../services/simulator');
-const { logActivity, updateLeadStatus, setLastAction, setLastAnsweredCallAt, getClientSettings, scheduleSms, getLead } = require('../services/leads');
+const {
+  logActivity, updateLeadStatus, setLastAction, setLastAnsweredCallAt, getClientSettings,
+  scheduleSms, getLead, getSmsTemplate, resolveTemplate,
+} = require('../services/leads');
 const { computeSmsSendTime } = require('../services/timezone');
-const { getFollowUpSmsMessage } = require('../services/twilio');
 
 // Internal notes (logActivity / console) stay technical and say "demo" —
 // useful for debugging. last_action is what the dashboard shows by
@@ -26,6 +28,22 @@ router.get('/pending-call', (req, res) => {
     access_token: call.access_token,
     call_id: call.call_id,
   });
+});
+
+// --------------------------------------------------------
+// POST /simulator/ringing
+// Called by Simulator.html the instant triggerIncomingCall() actually
+// runs — the ring screen is genuinely on screen and the ringtone is
+// genuinely playing. This is the fix for the dashboard's status bar
+// drifting out of sync with reality: previously 'ringing' was set the
+// moment the Retell session was technically ready (in queueDemoWebCall),
+// which is not the same moment a human is actually seeing the phone
+// ring — those two events happen on two independently-polling pages
+// with no shared clock between them.
+// --------------------------------------------------------
+router.post('/ringing', (req, res) => {
+  setCallStatus('ringing');
+  res.json({ success: true });
 });
 
 // --------------------------------------------------------
@@ -95,9 +113,11 @@ router.post('/end', async (req, res) => {
       // lead never also gets a "still want to book?" follow-up SMS.
       const lead = await getLead(lead_id);
       if (lead.status !== 'booked') {
-        const { timezone, settings } = await getClientSettings(lead.client_id);
+        const { timezone, settings, businessName } = await getClientSettings(lead.client_id);
         const { variant, sendAt } = computeSmsSendTime(answeredAt, timezone, settings);
-        const message = getFollowUpSmsMessage(lead, variant);
+        const slot = variant === 'morning' ? 'followup_morning' : 'followup_evening';
+        const template = await getSmsTemplate(lead.client_id, slot);
+        const message = resolveTemplate(template, lead, businessName);
         await scheduleSms(lead_id, message, variant, sendAt);
       }
     }
