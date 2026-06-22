@@ -149,6 +149,16 @@
     .fbtn:hover{color:var(--text);}
     .fbtn.active{border-color:var(--accent);color:var(--accent-text);background:var(--accent);}
 
+    /* ── SUB TABS (Templates/Sequence vs History, inside SMS & Email pages) ── */
+    .subtabs{display:flex;gap:4px;padding:10px 20px 0;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .stbtn{
+      padding:8px 4px;margin-right:14px;font-size:12px;font-weight:500;color:var(--muted);
+      background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;
+      transition:all 0.15s;font-family:'Inter',sans-serif;
+    }
+    .stbtn:hover{color:var(--text);}
+    .stbtn.active{color:var(--text);border-bottom-color:var(--accent);}
+
     /* ── LEADS LIST ── */
     .leads-wrap{flex:1;overflow-y:auto;padding:10px 14px;}
     .lead-card{
@@ -251,6 +261,48 @@
     .settings-row .fg{flex:1;margin-bottom:0;}
     .settings-hint{font-size:11px;color:var(--muted);margin-top:-6px;margin-bottom:12px;}
 
+    /* ── SMS TEMPLATE COMPOSER ── */
+    .composer-wrap{padding:16px 20px;max-width:640px;}
+    .template-card{border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:14px;}
+    .template-card.timing{border-color:#bfe3bf;background:#f7fcf7;}
+    .template-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:10px;}
+    .template-title{font-size:13px;font-weight:600;}
+    .template-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+    .var-pill{
+      display:inline-block;background:var(--contacted);color:var(--contacted-t);
+      font-size:11px;padding:3px 9px;border-radius:12px;margin-right:6px;margin-bottom:8px;
+      font-family:'JetBrains Mono',monospace;cursor:pointer;border:none;
+    }
+    .var-pill:hover{opacity:0.8;}
+    .template-box{
+      border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:13px;
+      min-height:54px;background:var(--bg);width:100%;font-family:'Inter',sans-serif;
+      resize:vertical;
+    }
+    .template-box:focus{outline:none;border-color:var(--accent);}
+    .template-save-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
+    .saved-tag{font-size:11px;color:var(--booked-t);display:none;}
+
+    /* ── EMAIL SEQUENCE BUILDER (collapsed-list, expand to edit) ── */
+    .seq-wrap{padding:16px 20px;max-width:640px;}
+    .seq-row{
+      border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:8px;
+      cursor:pointer;display:flex;justify-content:space-between;align-items:center;
+    }
+    .seq-row:hover{background:var(--card);}
+    .seq-row.expanded{border-color:var(--accent);background:var(--card);cursor:default;}
+    .seq-num{
+      width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-text);
+      font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:600;
+      margin-right:10px;flex-shrink:0;
+    }
+    .seq-row-title{font-size:12px;font-weight:600;}
+    .seq-row-delay{font-size:11px;color:var(--muted);margin-left:10px;}
+    .seq-expand-hint{font-size:11px;color:var(--muted);}
+    .seq-edit-body{padding-top:12px;}
+    .seq-delete{color:var(--dead-t);font-size:11px;cursor:pointer;margin-left:auto;}
+    .seq-delete:hover{text-decoration:underline;}
+
     /* ── RESPONSIVE ── */
     @media(max-width:700px){
       .menu-btn{display:block;}
@@ -348,6 +400,10 @@
 
     <!-- SMS PAGE -->
     <div id="pageSms" style="display:none;">
+      <div class="subtabs">
+        <button class="stbtn active" id="smsSubTemplates" onclick="setSmsSubTab('templates')">Templates</button>
+        <button class="stbtn" id="smsSubHistory" onclick="setSmsSubTab('history')">History</button>
+      </div>
       <div class="leads-wrap" id="smsWrap">
         <div class="empty"><h3>No client selected</h3><p>Choose a client from the top left.</p></div>
       </div>
@@ -355,6 +411,10 @@
 
     <!-- EMAIL PAGE -->
     <div id="pageEmail" style="display:none;">
+      <div class="subtabs">
+        <button class="stbtn active" id="emailSubBuilder" onclick="setEmailSubTab('builder')">Sequence</button>
+        <button class="stbtn" id="emailSubHistory" onclick="setEmailSubTab('history')">History</button>
+      </div>
       <div class="leads-wrap" id="emailWrap">
         <div class="empty"><h3>No client selected</h3><p>Choose a client from the top left.</p></div>
       </div>
@@ -643,7 +703,82 @@
   }
 
   /* ── SMS PAGE ── */
+  /* ── SMS PAGE — Templates (composer) and History (sent log) ── */
+  let smsSubTab = 'templates';
+
+  function setSmsSubTab(tab){
+    smsSubTab = tab;
+    document.getElementById('smsSubTemplates').classList.toggle('active', tab==='templates');
+    document.getElementById('smsSubHistory').classList.toggle('active', tab==='history');
+    loadSmsPage();
+  }
+
   async function loadSmsPage(){
+    if(smsSubTab==='templates') return loadSmsTemplates();
+    return loadSmsHistory();
+  }
+
+  const SMS_SLOT_META = [
+    { slot:'no_answer_1',      title:'1st missed-call text',          sub:'Sent immediately after the 1st no-answer — no timing rule applied', timing:false },
+    { slot:'no_answer_2',      title:'2nd missed-call text',          sub:'Sent immediately after the 2nd no-answer — no timing rule applied', timing:false },
+    { slot:'no_answer_final',  title:'Final missed-call text',        sub:'Sent immediately after the final no-answer attempt — no timing rule applied', timing:false },
+    { slot:'followup_morning', title:'Answered, not booked — morning variant', sub:'Sent the next morning, if the call was answered in the evening', timing:true },
+    { slot:'followup_evening', title:'Answered, not booked — evening variant', sub:'Sent that same evening, if the call was answered in the morning', timing:true },
+  ];
+
+  const TEMPLATE_VARS = ['first_name','offer','business_name'];
+
+  async function loadSmsTemplates(){
+    const wrap=document.getElementById('smsWrap');
+    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    try{
+      const templates = await api(`/clients/${currentClientId}/sms-templates`);
+      wrap.innerHTML = `<div class="composer-wrap">` + SMS_SLOT_META.map(meta=>`
+        <div class="template-card ${meta.timing?'timing':''}">
+          <div class="template-head">
+            <div>
+              <div class="template-title">${meta.title}</div>
+              <div class="template-sub">${meta.sub}</div>
+            </div>
+          </div>
+          <div style="margin-bottom:8px;">
+            ${TEMPLATE_VARS.map(v=>`<button class="var-pill" onclick="insertVar('${meta.slot}','${v}')">{{${v}}}</button>`).join('')}
+          </div>
+          <textarea class="template-box" id="tpl_${meta.slot}" rows="3">${templates[meta.slot]||''}</textarea>
+          <div class="template-save-row">
+            <button class="btn sm primary" onclick="saveTemplate('${meta.slot}')">Save</button>
+            <span class="saved-tag" id="saved_${meta.slot}">Saved</span>
+          </div>
+        </div>
+      `).join('') + `</div>`;
+    }catch(e){
+      wrap.innerHTML='<div class="empty"><h3>Could not load templates</h3></div>';
+    }
+  }
+
+  function insertVar(slot, varName){
+    const box = document.getElementById(`tpl_${slot}`);
+    const pos = box.selectionStart || box.value.length;
+    const insert = `{{${varName}}}`;
+    box.value = box.value.slice(0,pos) + insert + box.value.slice(pos);
+    box.focus();
+  }
+
+  async function saveTemplate(slot){
+    const message = document.getElementById(`tpl_${slot}`).value;
+    try{
+      await api(`/clients/${currentClientId}/sms-templates/${slot}`,{
+        method:'PATCH', body:JSON.stringify({ message })
+      });
+      const tag=document.getElementById(`saved_${slot}`);
+      tag.style.display='inline';
+      setTimeout(()=>{tag.style.display='none';},2000);
+    }catch(e){
+      alert('Failed to save template');
+    }
+  }
+
+  async function loadSmsHistory(){
     const wrap=document.getElementById('smsWrap');
     wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
     try{
@@ -671,8 +806,122 @@
     }
   }
 
-  /* ── EMAIL PAGE ── */
+  /* ── EMAIL PAGE — Sequence (builder) and History (sent log) ── */
+  let emailSubTab = 'builder';
+  let expandedStep = null;
+
+  function setEmailSubTab(tab){
+    emailSubTab = tab;
+    document.getElementById('emailSubBuilder').classList.toggle('active', tab==='builder');
+    document.getElementById('emailSubHistory').classList.toggle('active', tab==='history');
+    loadEmailPage();
+  }
+
   async function loadEmailPage(){
+    if(emailSubTab==='builder') return loadEmailSequence();
+    return loadEmailHistory();
+  }
+
+  // In-memory cache of the last loaded steps, so addSeqStep() can show a
+  // new blank step immediately alongside the real existing ones without
+  // a round trip — saving for real still only happens once Save Step is
+  // clicked, against the backend.
+  let _emailStepsCache = [];
+
+  async function loadEmailSequence(){
+    const wrap=document.getElementById('emailWrap');
+    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    try{
+      const steps = await api(`/clients/${currentClientId}/email-sequence`);
+      _emailStepsCache = steps || [];
+      renderEmailSequence(_emailStepsCache);
+    }catch(e){
+      wrap.innerHTML='<div class="empty"><h3>Could not load email sequence</h3></div>';
+    }
+  }
+
+  function renderEmailSequence(steps){
+    const wrap=document.getElementById('emailWrap');
+    const nextStepNum = steps.length>0 ? Math.max(...steps.map(s=>s.step_order))+1 : 1;
+
+    let html = `<div class="seq-wrap">`;
+    if(steps.length===0){
+      html += `<div class="empty" style="padding:30px 0;"><h3>No steps yet</h3><p>Add the first email in this client's nurture sequence.</p></div>`;
+    }
+    steps.sort((a,b)=>a.step_order-b.step_order).forEach(step=>{
+      const isOpen = expandedStep===step.step_order;
+      if(isOpen){
+        html += `
+          <div class="seq-row expanded">
+            <div class="seq-edit-body" style="width:100%;">
+              <div class="template-head">
+                <div class="seq-row-title"><span class="seq-num">${step.step_order}</span>Step ${step.step_order}</div>
+                <span class="seq-delete" onclick="deleteSeqStep(${step.step_order})">Delete</span>
+              </div>
+              <div class="fg"><label>Days after previous step</label><input type="number" min="1" id="seqDelay_${step.step_order}" value="${step.delay_days}"/></div>
+              <div class="fg"><label>Subject</label><input id="seqSubject_${step.step_order}" value="${escapeAttr(step.subject)}"/></div>
+              <div class="fg"><label>Body</label><textarea class="template-box" id="seqBody_${step.step_order}" rows="4">${step.body}</textarea></div>
+              <button class="btn sm primary" onclick="saveSeqStep(${step.step_order})">Save Step</button>
+              <button class="btn sm" onclick="expandedStep=null;loadEmailSequence();">Collapse</button>
+            </div>
+          </div>`;
+      }else{
+        html += `
+          <div class="seq-row" onclick="expandStep(${step.step_order})">
+            <div><span class="seq-num">${step.step_order}</span><span class="seq-row-title">${escapeHtml(step.subject)}</span><span class="seq-row-delay">${step.delay_days}d after previous</span></div>
+            <span class="seq-expand-hint">▾ expand</span>
+          </div>`;
+      }
+    });
+    html += `<button class="btn sm" onclick="addSeqStep(${nextStepNum})">+ Add Step</button>`;
+    html += `</div>`;
+    wrap.innerHTML = html;
+  }
+
+  function expandStep(stepOrder){
+    expandedStep = stepOrder;
+    loadEmailSequence();
+  }
+
+  function addSeqStep(stepOrder){
+    expandedStep = stepOrder;
+    renderEmailSequence([
+      ..._emailStepsCache,
+      { step_order: stepOrder, delay_days: 7, subject: '', body: '' }
+    ]);
+  }
+
+  async function saveSeqStep(stepOrder){
+    const delay_days = parseInt(document.getElementById(`seqDelay_${stepOrder}`).value,10) || 7;
+    const subject = document.getElementById(`seqSubject_${stepOrder}`).value.trim();
+    const body = document.getElementById(`seqBody_${stepOrder}`).value.trim();
+    if(!subject || !body) return alert('Subject and body are required');
+    try{
+      await api(`/clients/${currentClientId}/email-sequence/${stepOrder}`,{
+        method:'PUT', body:JSON.stringify({ delay_days, subject, body })
+      });
+      expandedStep = null;
+      loadEmailSequence();
+    }catch(e){
+      alert('Failed to save step');
+    }
+  }
+
+  async function deleteSeqStep(stepOrder){
+    if(!confirm(`Delete step ${stepOrder}?`)) return;
+    try{
+      await api(`/clients/${currentClientId}/email-sequence/${stepOrder}`,{ method:'DELETE' });
+      expandedStep = null;
+      loadEmailSequence();
+    }catch(e){
+      alert('Failed to delete step');
+    }
+  }
+
+  function escapeHtml(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
+
+  async function loadEmailHistory(){
     const wrap=document.getElementById('emailWrap');
     wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
     try{
