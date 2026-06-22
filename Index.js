@@ -16,8 +16,15 @@ const {
   getClientSettings,
   updateClientSettings,
   getBookingEventsForClient,
+  getSmsTemplate,
+  getSmsTemplates,
+  saveSmsTemplate,
+  resolveTemplate,
+  getEmailSequenceSteps,
+  saveEmailSequenceStep,
+  deleteEmailSequenceStep,
 } = require('./services/leads');
-const { sendSMS, getSMSMessage } = require('./services/twilio');
+const { sendSMS } = require('./services/twilio');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -215,6 +222,72 @@ app.get('/clients/:id/bookings', async (req, res) => {
 });
 
 // ================================================
+// SMS TEMPLATES — the 5 editable message slots used by the real
+// sequence logic in FollowUp.js / Webhooks.js / Simulator.routes.js
+// ================================================
+
+app.get('/clients/:id/sms-templates', async (req, res) => {
+  try {
+    const templates = await getSmsTemplates(req.params.id);
+    res.json(templates);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/clients/:id/sms-templates/:slot', async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: 'message is required' });
+    const data = await saveSmsTemplate(req.params.id, req.params.slot, message);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================================================
+// EMAIL SEQUENCE STEPS — editable nurture content, content only.
+// Timing between steps is controlled separately in client settings
+// (followup_settings.nurture_intervals_days).
+// ================================================
+
+app.get('/clients/:id/email-sequence', async (req, res) => {
+  try {
+    const steps = await getEmailSequenceSteps(req.params.id);
+    res.json(steps);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/clients/:id/email-sequence/:stepOrder', async (req, res) => {
+  try {
+    const { delay_days, subject, body } = req.body;
+    if (!subject || !body) return res.status(400).json({ error: 'subject and body are required' });
+    const data = await saveEmailSequenceStep(
+      req.params.id,
+      parseInt(req.params.stepOrder, 10),
+      delay_days || 7,
+      subject,
+      body
+    );
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/clients/:id/email-sequence/:stepOrder', async (req, res) => {
+  try {
+    await deleteEmailSequenceStep(req.params.id, parseInt(req.params.stepOrder, 10));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================================================
 // CALL LEAD — triggered by the dashboard "Call Lead" button
 // Pulls full lead context and fires Retell with it
 // ================================================
@@ -275,9 +348,14 @@ app.post('/simulate/no-answer', async (req, res) => {
     await updateLeadStatus(lead_id, 'attempted', { last_action: 'Called — no answer' });
     await logActivity(lead_id, 'call', 'no_answer', `Simulated no answer — attempt ${attemptNumber}`);
 
-    // Fire the SMS exactly like the real flow would
+    // Fire the SMS exactly like the real flow would — same template
+    // lookup as FollowUp.js/Webhooks.js, so testing this endpoint
+    // genuinely reflects what a real lead would receive.
     const lead = await getLead(lead_id);
-    const message = getSMSMessage(lead, attemptNumber);
+    const slot = attemptNumber === 1 ? 'no_answer_1' : attemptNumber === 2 ? 'no_answer_2' : 'no_answer_final';
+    const { businessName } = await getClientSettings(lead.client_id);
+    const template = await getSmsTemplate(lead.client_id, slot);
+    const message = resolveTemplate(template, lead, businessName);
     const smsResult = await sendSMS(lead.phone, message);
     await logActivity(lead_id, 'sms', smsResult.success ? 'sent' : 'bounced', message);
     await setLastAction(lead_id, 'SMS sent — no answer on call');
