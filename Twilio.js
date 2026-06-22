@@ -28,34 +28,11 @@ async function sendSMS(toNumber, message) {
   }
 }
 
-function getSMSMessage(lead, attemptNumber) {
-  const name = lead.name?.split(' ')[0] || 'there';
-  if (attemptNumber === 1) {
-    return `Hey ${name}, tried calling you just now about your roofing request. What's the best time for a quick 2 min call?`;
-  }
-  if (attemptNumber === 2) {
-    return `Hey ${name}, still trying to connect about your roofing quote. Still interested? Just reply yes.`;
-  }
-  return `Hey ${name}, last follow up on your roofing request. Reply here if you're still looking.`;
-}
+// NOTE: getSMSMessage() and getFollowUpSmsMessage() used to live here as
+// hardcoded template strings. They've been replaced by the editable,
+// per-client template system in Leads.js (getSmsTemplate +
+// resolveTemplate, backed by the ldm_sms_templates table) — every call
+// site that used these now reads real, client-editable templates
+// instead. Removed here rather than left as dead code.
 
-// --------------------------------------------------------
-// POST-ANSWERED-CALL follow-up — different purpose from getSMSMessage
-// above. That one is for "we tried to call and missed you." This one is
-// for "we spoke, but didn't book" — sent later the same day or next
-// morning depending on when the call happened (see Timezone.js). Needs
-// two tones since a message that reads "good morning!" sent at 6pm would
-// look broken.
-// --------------------------------------------------------
-function getFollowUpSmsMessage(lead, variant) {
-  const name = lead.name?.split(' ')[0] || 'there';
-  const offer = lead.offer_seen || 'your request';
-
-  if (variant === 'morning') {
-    return `Morning ${name}! Following up on our call about ${offer} — still want to get something booked in? Happy to sort it whenever works for you.`;
-  }
-  // default to evening tone
-  return `Hey ${name}, following up after our call earlier about ${offer} — still want to get something booked in? Just let me know.`;
-}
-
-module.exports = { sendSMS, getSMSMessage, getFollowUpSmsMessage };
+module.exports = { sendSMS };
