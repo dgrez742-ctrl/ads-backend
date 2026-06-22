@@ -439,11 +439,21 @@ app.post('/test/lead', async (req, res) => {
 
 // ---- SERVE PHONE SIMULATOR ----
 app.get('/simulator-screen', (req, res) => {
+  res.set('Cache-Control', 'no-store');
   res.sendFile('/app/simulator.html');
 });
 
 // ---- SERVE DASHBOARD ----
+// Cache-Control: no-store is critical here. Express's sendFile() sets
+// ETag/conditional-cache headers by default, which means a browser can
+// legitimately receive a 304 and keep showing an OLD cached copy of
+// this file even after a fresh deploy — the person sees stale UI/JS
+// and has no way to know a real update already shipped. This is very
+// likely what caused "I fixed the code but it still shows the old
+// behavior" reports — the deployed file was correct, the browser just
+// never re-fetched it.
 app.get('*', (req, res) => {
+  res.set('Cache-Control', 'no-store');
   res.sendFile('/app/Index.html');
 });
 
