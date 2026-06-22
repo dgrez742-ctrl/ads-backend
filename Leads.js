@@ -202,17 +202,18 @@ const { mergeSettings } = require('./timezone');
 async function getClientSettings(clientId) {
   const { data, error } = await supabase
     .from('ldm_clients')
-    .select('timezone, followup_settings')
+    .select('timezone, followup_settings, business_name, name')
     .eq('id', clientId)
     .single();
 
   if (error || !data) {
-    return { timezone: 'America/New_York', settings: mergeSettings({}) };
+    return { timezone: 'America/New_York', settings: mergeSettings({}), businessName: null };
   }
 
   return {
     timezone: data.timezone || 'America/New_York',
     settings: mergeSettings(data.followup_settings),
+    businessName: data.business_name || data.name || null,
   };
 }
 
@@ -355,6 +356,139 @@ async function getBookingEventsForClient(clientId) {
   return (data || []).map(row => ({ ...row, lead: leadMap[row.lead_id] || null }));
 }
 
+// --------------------------------------------------------
+// SMS TEMPLATES — editable per client, replacing hardcoded strings in
+// Twilio.js. resolveTemplate() fills in {{first_name}}/{{offer}}/
+// {{business_name}} the same way your existing email tool's variable
+// syntax works, so the pattern is familiar rather than new.
+// --------------------------------------------------------
+
+const DEFAULT_SMS_TEMPLATES = {
+  no_answer_1:      `Hey {{first_name}}, tried calling you just now about your roofing request. What's the best time for a quick 2 min call?`,
+  no_answer_2:      `Hey {{first_name}}, still trying to connect about your roofing quote. Still interested? Just reply yes.`,
+  no_answer_final:  `Hey {{first_name}}, last follow up on your roofing request. Reply here if you're still looking.`,
+  followup_morning: `Morning {{first_name}}! Following up on our call about {{offer}} — still want to get something booked in? Happy to sort it whenever works for you.`,
+  followup_evening: `Hey {{first_name}}, following up after our call earlier about {{offer}} — still want to get something booked in? Just let me know.`,
+};
+
+// Fills {{first_name}}, {{offer}}, {{business_name}} into a template
+// string using real lead/client data. Falls back to sensible defaults
+// if a value is missing, rather than leaving a literal "{{offer}}" in
+// a real text message.
+function resolveTemplate(template, lead, businessName) {
+  const firstName = lead?.name?.split(' ')[0] || 'there';
+  const offer = lead?.offer_seen || 'your request';
+  const business = businessName || 'us';
+
+  return template
+    .replace(/\{\{first_name\}\}/g, firstName)
+    .replace(/\{\{offer\}\}/g, offer)
+    .replace(/\{\{business_name\}\}/g, business);
+}
+
+// Returns all 5 template slots for a client — DB value if one exists
+// for that slot, otherwise the built-in default. This means a client
+// with no rows yet behaves exactly like the old hardcoded behavior,
+// and editing one slot doesn't require the other four to already exist.
+async function getSmsTemplates(clientId) {
+  const { data, error } = await supabase
+    .from('ldm_sms_templates')
+    .select('slot, message')
+    .eq('client_id', clientId);
+
+  if (error) {
+    return { ...DEFAULT_SMS_TEMPLATES };
+  }
+
+  const result = { ...DEFAULT_SMS_TEMPLATES };
+  for (const row of (data || [])) {
+    result[row.slot] = row.message;
+  }
+  return result;
+}
+
+async function getSmsTemplate(clientId, slot) {
+  const all = await getSmsTemplates(clientId);
+  return all[slot] || DEFAULT_SMS_TEMPLATES[slot];
+}
+
+// Upsert — slot is unique per client, so this both creates and updates.
+async function saveSmsTemplate(clientId, slot, message) {
+  const { data, error } = await supabase
+    .from('ldm_sms_templates')
+    .upsert([{ client_id: clientId, slot, message, updated_at: new Date().toISOString() }], { onConflict: 'client_id,slot' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// --------------------------------------------------------
+// EMAIL SEQUENCE STEPS — editable per client nurture content. Plugs
+// into the EXISTING nurture timing logic (ldm_nurture_sequence /
+// nurture_intervals_days in client settings) — this table only supplies
+// the subject/body for whichever step_number that logic is already on.
+// --------------------------------------------------------
+
+async function getEmailSequenceSteps(clientId) {
+  const { data, error } = await supabase
+    .from('ldm_email_sequence_steps')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('step_order', { ascending: true });
+
+  if (error) return [];
+  return data || [];
+}
+
+async function getEmailStepContent(clientId, stepOrder) {
+  const { data, error } = await supabase
+    .from('ldm_email_sequence_steps')
+    .select('subject, body')
+    .eq('client_id', clientId)
+    .eq('step_order', stepOrder)
+    .single();
+
+  if (error || !data) {
+    // No content configured for this step yet — fall back to a generic
+    // placeholder rather than sending nothing, so the sequence still
+    // "works" end to end before a client has written real copy.
+    return {
+      subject: `Following up — step ${stepOrder}`,
+      body: `Just checking in about your request. Let us know if you're still interested.`,
+    };
+  }
+  return data;
+}
+
+async function saveEmailSequenceStep(clientId, stepOrder, delayDays, subject, body) {
+  const { data, error } = await supabase
+    .from('ldm_email_sequence_steps')
+    .upsert([{
+      client_id: clientId,
+      step_order: stepOrder,
+      delay_days: delayDays,
+      subject,
+      body,
+    }], { onConflict: 'client_id,step_order' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function deleteEmailSequenceStep(clientId, stepOrder) {
+  const { error } = await supabase
+    .from('ldm_email_sequence_steps')
+    .delete()
+    .eq('client_id', clientId)
+    .eq('step_order', stepOrder);
+
+  if (error) throw error;
+}
+
 module.exports = {
   leadExists,
   createLead,
@@ -379,4 +513,12 @@ module.exports = {
   markScheduledSmsSkipped,
   recordBookingEvent,
   getBookingEventsForClient,
+  resolveTemplate,
+  getSmsTemplates,
+  getSmsTemplate,
+  saveSmsTemplate,
+  getEmailSequenceSteps,
+  getEmailStepContent,
+  saveEmailSequenceStep,
+  deleteEmailSequenceStep,
 };
