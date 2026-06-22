@@ -4,9 +4,10 @@ const {
   leadExists, createLead, updateLeadStatus, logActivity, getAttemptCount, moveToNurture,
   getLead, setLastAnsweredCallAt, getClientSettings, scheduleSms,
   recordBookingEvent, cancelScheduledSmsForLead,
+  getSmsTemplate, resolveTemplate,
 } = require('../services/leads');
 const { triggerRetellCall } = require('../services/retell');
-const { sendSMS, getSMSMessage, getFollowUpSmsMessage } = require('../services/twilio');
+const { sendSMS } = require('../services/twilio');
 const { queueDemoWebCall } = require('../services/simulator');
 const { computeSmsSendTime } = require('../services/timezone');
 
@@ -162,9 +163,11 @@ router.post('/retell', async (req, res) => {
       await setLastAnsweredCallAt(leadId, new Date());
       const lead = await getLead(leadId);
       if (lead.status !== 'booked') {
-        const { timezone, settings } = await getClientSettings(lead.client_id);
+        const { timezone, settings, businessName } = await getClientSettings(lead.client_id);
         const { variant, sendAt } = computeSmsSendTime(new Date(), timezone, settings);
-        const message = getFollowUpSmsMessage(lead, variant);
+        const slot = variant === 'morning' ? 'followup_morning' : 'followup_evening';
+        const template = await getSmsTemplate(lead.client_id, slot);
+        const message = resolveTemplate(template, lead, businessName);
         await scheduleSms(leadId, message, variant, sendAt);
       }
     }
@@ -174,16 +177,19 @@ router.post('/retell', async (req, res) => {
       const attemptCount = await getAttemptCount(leadId);
 
       if (attemptCount <= 3) {
-        // Still in hot follow up sequence — send SMS
-        // Get lead data for SMS
-        const { data: lead } = require('../supabase')
-          .from('ldm_leads')
-          .select('*')
-          .eq('id', leadId)
-          .single();
+        // Still in hot follow up sequence — send SMS.
+        // FIX: this previously called require('../supabase').from(...)
+        // without awaiting it, which returns a Promise, not query
+        // results — { data: lead } was always destructuring off an
+        // unresolved Promise, so `lead` was always undefined and this
+        // whole branch silently never sent anything for real calls.
+        const lead = await getLead(leadId);
 
         if (lead) {
-          const message = getSMSMessage(lead, attemptCount);
+          const slot = attemptCount === 1 ? 'no_answer_1' : attemptCount === 2 ? 'no_answer_2' : 'no_answer_final';
+          const { businessName } = await getClientSettings(lead.client_id);
+          const template = await getSmsTemplate(lead.client_id, slot);
+          const message = resolveTemplate(template, lead, businessName);
           const smsResult = await sendSMS(lead.phone, message);
           await logActivity(leadId, 'sms', smsResult.success ? 'sent' : 'bounced', message);
         }
