@@ -236,6 +236,11 @@
     .act-type{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text);min-width:44px;text-transform:uppercase;padding-top:1px;font-weight:600;}
     .act-out{color:var(--muted);flex:1;}
     .act-out strong{color:var(--text);}
+    .act-duration{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap;}
+    .act-summary{font-size:11px;color:var(--text);margin-top:6px;padding:8px 10px;background:var(--card);border-radius:5px;width:100%;line-height:1.4;}
+    .act-transcript-toggle{font-size:11px;color:var(--muted);cursor:pointer;margin-top:6px;}
+    .act-transcript-toggle:hover{color:var(--text);}
+    .act-transcript{font-size:11px;color:var(--text);margin-top:6px;padding:10px;background:var(--card);border-radius:5px;width:100%;line-height:1.5;white-space:pre-wrap;max-height:200px;overflow-y:auto;}
     .act-time{color:var(--muted);white-space:nowrap;font-size:11px;}
 
     .sim-btn-row{display:flex;flex-wrap:wrap;gap:6px;}
@@ -1088,14 +1093,40 @@
       if(!acts||acts.length===0){
         el.innerHTML='<div style="color:var(--muted);font-size:12px;">No activity yet.</div>';
       }else{
-        el.innerHTML=acts.map(a=>`
-          <div class="act-item">
-            <span class="act-type">${a.activity_type}</span>
-            <span class="act-out"><strong>${a.outcome}</strong>${a.notes?' — '+a.notes:''}</span>
-            <span class="act-time">${timeAgo(a.created_at)}</span>
-          </div>`).join('');
+        el.innerHTML=acts.map((a,i)=>{
+          // call_summary/sentiment/transcript only exist on rows that
+          // came from Retell's call_ended/call_analyzed webhook — most
+          // activity rows (SMS, no-answer calls) won't have them, so
+          // each piece only renders when actually present.
+          const summaryLine = a.call_summary
+            ? `<div class="act-summary"><strong>Summary:</strong> ${escapeHtml(a.call_summary)}</div>` : '';
+          const sentimentTag = a.sentiment
+            ? `<span class="badge ${a.sentiment==='negative'?'dead':a.sentiment==='positive'?'booked':'new'}" style="margin-left:6px;">${escapeHtml(a.sentiment)}</span>` : '';
+          const durationTag = a.duration_seconds
+            ? `<span class="act-duration">${Math.floor(a.duration_seconds/60)}:${String(a.duration_seconds%60).padStart(2,'0')}</span>` : '';
+          const transcriptToggle = a.transcript
+            ? `<div class="act-transcript-toggle" onclick="toggleTranscript(${i})">▾ View transcript</div>
+               <div class="act-transcript" id="transcript_${i}" style="display:none;">${escapeHtml(a.transcript)}</div>` : '';
+
+          return `
+          <div class="act-item" style="flex-direction:column;align-items:flex-start;">
+            <div style="display:flex;gap:10px;width:100%;align-items:flex-start;">
+              <span class="act-type">${a.activity_type}</span>
+              <span class="act-out"><strong>${a.outcome}</strong>${a.notes?' — '+escapeHtml(a.notes):''}${sentimentTag}</span>
+              ${durationTag}
+              <span class="act-time">${timeAgo(a.created_at)}</span>
+            </div>
+            ${summaryLine}
+            ${transcriptToggle}
+          </div>`;
+        }).join('');
       }
     }catch(e){console.error(e);}
+  }
+
+  function toggleTranscript(i){
+    const el = document.getElementById(`transcript_${i}`);
+    el.style.display = el.style.display==='none' ? 'block' : 'none';
   }
 
   function closePanel(){document.getElementById('panelOverlay').classList.remove('open');}
