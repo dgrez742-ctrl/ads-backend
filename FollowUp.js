@@ -3,7 +3,7 @@ const {
   getLeadsForFollowUp, getStalledLeads, getNurtureLeadsDue, updateLeadStatus, logActivity,
   getAttemptCount, moveToNurture, updateNurtureStep, getClientSettings,
   getDueScheduledSms, markScheduledSmsSent, markScheduledSmsSkipped, getLead,
-  getSmsTemplate, resolveTemplate, getEmailStepContent,
+  getEmailStepContent,
 } = require('../services/leads');
 const { triggerRetellCall } = require('../services/retell');
 const { sendSMS } = require('../services/twilio');
@@ -72,11 +72,22 @@ async function runFollowUpJob() {
     for (const lead of leads) {
       const attemptCount = await getAttemptCount(lead.id);
 
-      // Follow up sequence:
+      // Follow up sequence — this job is ONLY responsible for
+      // re-triggering the CALL on its day-paced schedule (Day 2, Day 3,
+      // Day 4). It must never send SMS itself: every no-answer outcome
+      // already sends the appropriate no_answer_1/2/final SMS
+      // immediately, at the moment it happens — for real calls inside
+      // /webhook/retell, for demo calls inside /simulator/decline. This
+      // job used to ALSO send an SMS here on attempts 2 and 3, which
+      // meant a real lead would get the SMS twice for the same
+      // no-answer event: once immediately from the webhook, once again
+      // from this batch job. Removed — the immediate sends are the only
+      // sends now; this job just re-dials.
+      //
       // Attempt 1 — already done (initial call on lead intake)
       // Attempt 2 — call again next day
       // Attempt 3 — call again day after
-      // Attempt 4 — final call + final SMS + final email
+      // Attempt 4 — final call attempt
       // After 4 attempts — move to nurture
 
       if (attemptCount === 1) {
@@ -86,28 +97,16 @@ async function runFollowUpJob() {
         await logActivity(lead.id, 'call', result.success ? 'no_answer' : 'bounced', 'Day 2 follow up call');
 
       } else if (attemptCount === 2) {
-        // Day 3 — call + SMS
+        // Day 3 — call again
         console.log(`Lead ${lead.id} — attempt 3`);
         const result = await triggerRetellCall(lead, 3);
         await logActivity(lead.id, 'call', result.success ? 'no_answer' : 'bounced', 'Day 3 follow up call');
 
-        const { businessName } = await getClientSettings(lead.client_id);
-        const template = await getSmsTemplate(lead.client_id, 'no_answer_2');
-        const message = resolveTemplate(template, lead, businessName);
-        const smsResult = await sendSMS(lead.phone, message);
-        await logActivity(lead.id, 'sms', smsResult.success ? 'sent' : 'bounced', message);
-
       } else if (attemptCount === 3) {
-        // Day 4 — final call + final SMS
+        // Day 4 — final call attempt
         console.log(`Lead ${lead.id} — final attempt`);
         const result = await triggerRetellCall(lead, 4);
         await logActivity(lead.id, 'call', result.success ? 'no_answer' : 'bounced', 'Final follow up call');
-
-        const { businessName } = await getClientSettings(lead.client_id);
-        const template = await getSmsTemplate(lead.client_id, 'no_answer_final');
-        const message = resolveTemplate(template, lead, businessName);
-        const smsResult = await sendSMS(lead.phone, message);
-        await logActivity(lead.id, 'sms', smsResult.success ? 'sent' : 'bounced', message);
 
       } else if (attemptCount >= 4) {
         // Exhausted — move to nurture
