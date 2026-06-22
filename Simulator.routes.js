@@ -3,9 +3,10 @@ const router = express.Router();
 const { takePendingCall, clearActiveCall, getCallStatus, setCallStatus } = require('../services/simulator');
 const {
   logActivity, updateLeadStatus, setLastAction, setLastAnsweredCallAt, getClientSettings,
-  scheduleSms, getLead, getSmsTemplate, resolveTemplate,
+  scheduleSms, getLead, getSmsTemplate, resolveTemplate, incrementAttemptCount, getAttemptCount,
 } = require('../services/leads');
 const { computeSmsSendTime } = require('../services/timezone');
+const { sendSMS } = require('../services/twilio');
 
 // Internal notes (logActivity / console) stay technical and say "demo" —
 // useful for debugging. last_action is what the dashboard shows by
@@ -72,7 +73,11 @@ router.post('/answer', async (req, res) => {
 // --------------------------------------------------------
 // POST /simulator/decline
 // The web call session was already silently connecting in the background;
-// the frontend disconnects it client-side. This just logs the outcome.
+// the frontend disconnects it client-side. This logs the outcome AND
+// sends the no-answer SMS immediately — NOT deferred to the hourly
+// follow-up cron (FollowUp.js). That cron is only responsible for
+// re-attempting the CALL on its day-paced schedule; the SMS itself must
+// go out right away, in this same request, every time.
 // --------------------------------------------------------
 router.post('/decline', async (req, res) => {
   try {
@@ -81,6 +86,19 @@ router.post('/decline', async (req, res) => {
     if (lead_id) {
       await updateLeadStatus(lead_id, 'attempted', { last_action: 'No answer' });
       await logActivity(lead_id, 'call', 'no_answer', 'Demo call declined');
+
+      // attempt_count was already incremented by /call at the moment
+      // this call was triggered (see Index.js) — read it here rather
+      // than incrementing again, so the slot picked matches THIS call.
+      const lead = await getLead(lead_id);
+      const attemptCount = lead.attempt_count || 1;
+      const slot = attemptCount <= 1 ? 'no_answer_1' : attemptCount === 2 ? 'no_answer_2' : 'no_answer_final';
+      const { businessName } = await getClientSettings(lead.client_id);
+      const template = await getSmsTemplate(lead.client_id, slot);
+      const message = resolveTemplate(template, lead, businessName);
+      const smsResult = await sendSMS(lead.phone, message);
+      await logActivity(lead_id, 'sms', smsResult.success ? 'sent' : 'bounced', message);
+      await setLastAction(lead_id, 'SMS sent — no answer on call');
     }
     clearActiveCall();
     setTimeout(() => setCallStatus('idle'), 2000); // brief window so the dashboard bar can show "Declined" before resetting
