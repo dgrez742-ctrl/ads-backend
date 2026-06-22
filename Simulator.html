@@ -341,6 +341,11 @@
 
     if(navigator.vibrate) navigator.vibrate([500,300,500,300,500]);
 
+    // Tell the backend the ring screen is genuinely visible right now —
+    // this is what the dashboard's status bar actually reflects, instead
+    // of guessing based on when the Retell session was technically ready.
+    fetch(`${API}/simulator/ringing`, { method: 'POST' }).catch(()=>{});
+
     // Silently connect the Retell web call session in the background.
     // The session is fully live by the time the user answers — mic stays
     // muted and we never call startAudioPlayback() until Answer, so
@@ -358,13 +363,29 @@
         return;
       }
       retellClient = new window.retellClientJsSdk.RetellWebClient();
+
+      // CRITICAL: mute happens here, synchronously, BEFORE startCall() is
+      // ever invoked — not inside the call_started handler. The SDK's
+      // audio defaults to live the instant the underlying connection opens,
+      // which can happen before call_started fires. Waiting for that event
+      // to mute left a real window where the agent could be heard talking
+      // before Answer was ever clicked — which is exactly the bug reported.
+      // From here on, audio only ever turns on via an explicit unmute()
+      // call inside answerCall().
+      retellClient.mute();
+
       retellClient.on('call_started', async () => {
         retellConnected = true;
-        // If Answer was already clicked before this fired (the whole point —
-        // answering should feel instant), unmute now instead of staying
-        // silent forever. This is the fix: previously unmuting only
-        // happened inside answerCall() itself, so if call_started hadn't
-        // fired yet at click time, audio never started at all.
+        // Defensive re-mute — in case the SDK resets audio state internally
+        // when the call actually starts. If Answer was already clicked
+        // before this fired (the whole point — answering should feel
+        // instant), unmute now instead of staying silent forever.
+        //
+        // Mic permission itself is requested synchronously inside the
+        // actual click in answerCall() — by the time this fires, that
+        // request has already been made (or denied). unmute() here just
+        // re-asserts publish state on the now-ready room; it doesn't
+        // need to request permission again.
         if(answerWasClicked){
           try{
             retellClient.unmute();
@@ -381,6 +402,11 @@
         console.error('Retell call error', err);
       });
       await retellClient.startCall({ accessToken });
+      // Re-assert mute immediately after startCall() resolves too, closing
+      // any remaining gap between connection and the call_started event.
+      if(!answerWasClicked){
+        retellClient.mute();
+      }
     }catch(e){
       console.error('Failed to pre-warm Retell call', e);
     }
@@ -397,6 +423,20 @@
     document.getElementById('callName').textContent = currentLead.name || 'Unknown';
     document.getElementById('callStatusTxt').textContent = 'Connected';
     showScreen('incallScreen');
+
+    // Explicitly request mic permission HERE, synchronously inside the
+    // actual click handler — not deferred into an async event callback
+    // like call_started. Browsers can silently block getUserMedia-based
+    // prompts (which is what unmute()/setMicrophoneEnabled triggers
+    // internally) when they're not directly tied to a user gesture, with
+    // no visible error anywhere. This is almost certainly what caused
+    // the agent to not hear the person on a real call — the permission
+    // request was happening inside an async callback, not a click.
+    try{
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+    }catch(e){
+      console.error('Microphone permission denied or unavailable', e);
+    }
 
     // Record intent immediately. If the session is already connected,
     // unmute right now. If call_started hasn't fired yet, the handler in
