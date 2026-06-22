@@ -350,11 +350,8 @@
     // The session is fully live by the time the user answers — mic stays
     // muted and we never call startAudioPlayback() until Answer, so
     // nothing is heard in either direction while it's "ringing".
-    answerWasClicked = false;
     connectRetellSilently(data.access_token);
   }
-
-  let answerWasClicked = false; // tracks intent even if it arrives before call_started fires
 
   async function connectRetellSilently(accessToken){
     try{
@@ -365,35 +362,26 @@
       retellClient = new window.retellClientJsSdk.RetellWebClient();
 
       // CRITICAL: mute happens here, synchronously, BEFORE startCall() is
-      // ever invoked — not inside the call_started handler. The SDK's
-      // audio defaults to live the instant the underlying connection opens,
-      // which can happen before call_started fires. Waiting for that event
-      // to mute left a real window where the agent could be heard talking
-      // before Answer was ever clicked — which is exactly the bug reported.
-      // From here on, audio only ever turns on via an explicit unmute()
-      // call inside answerCall().
+      // ever invoked — the SDK's audio defaults to live the instant the
+      // underlying connection opens, which can happen before call_started
+      // fires.
       retellClient.mute();
 
-      retellClient.on('call_started', async () => {
+      // STRUCTURAL RULE: call_started is an automatic background event —
+      // it must NEVER touch audio (mute/unmute/startAudioPlayback) under
+      // any condition. The ONLY place audio is ever allowed to turn on is
+      // inside answerCall() itself, triggered by the actual button click.
+      // The previous version checked an `answerWasClicked` flag here and
+      // would unmute right inside this automatic handler if true — which
+      // meant audio could start from a background event whenever it
+      // happened to fire after the click, instead of always being
+      // initiated by the click itself. That's a race condition by
+      // design, not a deterministic trigger, which is exactly what
+      // produced "worked once, didn't the next time" behavior. This
+      // handler now does nothing but record that the room is ready;
+      // answerCall() is solely responsible for noticing that and acting.
+      retellClient.on('call_started', () => {
         retellConnected = true;
-        // Defensive re-mute — in case the SDK resets audio state internally
-        // when the call actually starts. If Answer was already clicked
-        // before this fired (the whole point — answering should feel
-        // instant), unmute now instead of staying silent forever.
-        //
-        // Mic permission itself is requested synchronously inside the
-        // actual click in answerCall() — by the time this fires, that
-        // request has already been made (or denied). unmute() here just
-        // re-asserts publish state on the now-ready room; it doesn't
-        // need to request permission again.
-        if(answerWasClicked){
-          try{
-            retellClient.unmute();
-            await retellClient.startAudioPlayback();
-          }catch(e){ console.error('Failed to unmute after late call_started', e); }
-        }else{
-          retellClient.mute();
-        }
       });
       retellClient.on('call_ended', () => {
         retellConnected = false;
@@ -402,11 +390,12 @@
         console.error('Retell call error', err);
       });
       await retellClient.startCall({ accessToken });
-      // Re-assert mute immediately after startCall() resolves too, closing
-      // any remaining gap between connection and the call_started event.
-      if(!answerWasClicked){
-        retellClient.mute();
-      }
+      // Re-assert mute immediately after startCall() resolves too, in
+      // case the room went live before call_started had a chance to
+      // fire. Always re-mute here unconditionally — there is no
+      // "answerWasClicked" exception anymore, since answerCall() never
+      // depends on this function to unmute on its behalf.
+      retellClient.mute();
     }catch(e){
       console.error('Failed to pre-warm Retell call', e);
     }
@@ -443,12 +432,28 @@
     // connectRetellSilently() will unmute as soon as it does — so audio
     // always starts one way or the other, instead of silently never
     // starting when the click happens to land before that event.
-    answerWasClicked = true;
+    // answerCall() is now the ONLY place audio is ever turned on — no
+    // exceptions, no background event acting on its behalf. If the
+    // Retell session isn't connected yet at the moment of the click,
+    // this waits for it directly, right here, rather than leaving that
+    // responsibility to call_started (which no longer touches audio at
+    // all). Short poll, capped at 5s as a sane upper bound — startCall()
+    // connecting takes a fraction of that in practice.
+    const waitForConnection = async () => {
+      const start = Date.now();
+      while(!retellConnected && (Date.now()-start) < 5000){
+        await new Promise(r=>setTimeout(r,50));
+      }
+    };
+    if(!retellConnected) await waitForConnection();
+
     if(retellClient && retellConnected){
       try{
         retellClient.unmute();
         await retellClient.startAudioPlayback();
       }catch(e){ console.error('Failed to unmute Retell call', e); }
+    }else{
+      console.error('Retell session never connected within 5s of answering');
     }
 
     callSeconds = 0;
