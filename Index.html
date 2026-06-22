@@ -401,8 +401,8 @@
     <!-- SMS PAGE -->
     <div id="pageSms" style="display:none;">
       <div class="subtabs">
-        <button class="stbtn active" id="smsSubTemplates" onclick="setSmsSubTab('templates')">Templates</button>
-        <button class="stbtn" id="smsSubHistory" onclick="setSmsSubTab('history')">History</button>
+        <button class="stbtn" id="smsSubTemplates" onclick="setSmsSubTab('templates')">Templates</button>
+        <button class="stbtn active" id="smsSubHistory" onclick="setSmsSubTab('history')">History</button>
       </div>
       <div class="leads-wrap" id="smsWrap">
         <div class="empty"><h3>No client selected</h3><p>Choose a client from the top left.</p></div>
@@ -412,8 +412,8 @@
     <!-- EMAIL PAGE -->
     <div id="pageEmail" style="display:none;">
       <div class="subtabs">
-        <button class="stbtn active" id="emailSubBuilder" onclick="setEmailSubTab('builder')">Sequence</button>
-        <button class="stbtn" id="emailSubHistory" onclick="setEmailSubTab('history')">History</button>
+        <button class="stbtn" id="emailSubBuilder" onclick="setEmailSubTab('builder')">Sequence</button>
+        <button class="stbtn active" id="emailSubHistory" onclick="setEmailSubTab('history')">History</button>
       </div>
       <div class="leads-wrap" id="emailWrap">
         <div class="empty"><h3>No client selected</h3><p>Choose a client from the top left.</p></div>
@@ -637,13 +637,13 @@
     refreshCurrentPage();
   }
 
-  function refreshCurrentPage(){
+  function refreshCurrentPage(silent){
     if(!currentClientId)return;
-    if(currentPage==='leads')    return loadLeads();
-    if(currentPage==='sms')      return loadSmsPage();
-    if(currentPage==='email')    return loadEmailPage();
-    if(currentPage==='bookings') return loadBookingsPage();
-    if(currentPage==='settings') return loadSettingsPage();
+    if(currentPage==='leads')    return loadLeads(silent);
+    if(currentPage==='sms')      return loadSmsPage(silent);
+    if(currentPage==='email')    return loadEmailPage(silent);
+    if(currentPage==='bookings') return loadBookingsPage(silent);
+    if(currentPage==='settings') return loadSettingsPage(silent);
   }
 
   /* ── LEADS ── */
@@ -704,7 +704,7 @@
 
   /* ── SMS PAGE ── */
   /* ── SMS PAGE — Templates (composer) and History (sent log) ── */
-  let smsSubTab = 'templates';
+  let smsSubTab = 'history';
 
   function setSmsSubTab(tab){
     smsSubTab = tab;
@@ -713,9 +713,9 @@
     loadSmsPage();
   }
 
-  async function loadSmsPage(){
-    if(smsSubTab==='templates') return loadSmsTemplates();
-    return loadSmsHistory();
+  async function loadSmsPage(silent){
+    if(smsSubTab==='templates') return loadSmsTemplates(silent);
+    return loadSmsHistory(silent);
   }
 
   const SMS_SLOT_META = [
@@ -728,9 +728,9 @@
 
   const TEMPLATE_VARS = ['first_name','offer','business_name'];
 
-  async function loadSmsTemplates(){
+  async function loadSmsTemplates(silent){
     const wrap=document.getElementById('smsWrap');
-    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
     try{
       const templates = await api(`/clients/${currentClientId}/sms-templates`);
       wrap.innerHTML = `<div class="composer-wrap">` + SMS_SLOT_META.map(meta=>`
@@ -778,9 +778,9 @@
     }
   }
 
-  async function loadSmsHistory(){
+  async function loadSmsHistory(silent){
     const wrap=document.getElementById('smsWrap');
-    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
     try{
       const rows=await api(`/clients/${currentClientId}/activity/sms`);
       if(!rows||rows.length===0){
@@ -807,7 +807,7 @@
   }
 
   /* ── EMAIL PAGE — Sequence (builder) and History (sent log) ── */
-  let emailSubTab = 'builder';
+  let emailSubTab = 'history';
   let expandedStep = null;
 
   function setEmailSubTab(tab){
@@ -817,9 +817,9 @@
     loadEmailPage();
   }
 
-  async function loadEmailPage(){
-    if(emailSubTab==='builder') return loadEmailSequence();
-    return loadEmailHistory();
+  async function loadEmailPage(silent){
+    if(emailSubTab==='builder') return loadEmailSequence(silent);
+    return loadEmailHistory(silent);
   }
 
   // In-memory cache of the last loaded steps, so addSeqStep() can show a
@@ -828,9 +828,9 @@
   // clicked, against the backend.
   let _emailStepsCache = [];
 
-  async function loadEmailSequence(){
+  async function loadEmailSequence(silent){
     const wrap=document.getElementById('emailWrap');
-    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
     try{
       const steps = await api(`/clients/${currentClientId}/email-sequence`);
       _emailStepsCache = steps || [];
@@ -921,9 +921,9 @@
   function escapeHtml(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
   function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
 
-  async function loadEmailHistory(){
+  async function loadEmailHistory(silent){
     const wrap=document.getElementById('emailWrap');
-    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
     try{
       const rows=await api(`/clients/${currentClientId}/activity/email`);
       if(!rows||rows.length===0){
@@ -950,9 +950,9 @@
   }
 
   /* ── BOOKINGS PAGE ── */
-  async function loadBookingsPage(){
+  async function loadBookingsPage(silent){
     const wrap=document.getElementById('bookingsWrap');
-    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
     try{
       const rows=await api(`/clients/${currentClientId}/bookings`);
       if(!rows||rows.length===0){
@@ -990,9 +990,9 @@
     'Europe/London','Europe/Dublin',
   ];
 
-  async function loadSettingsPage(){
+  async function loadSettingsPage(silent){
     const wrap=document.getElementById('settingsWrap');
-    wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
+    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
     try{
       const { timezone, settings } = await api(`/clients/${currentClientId}/settings`);
 
@@ -1308,7 +1308,22 @@
   });
 
   loadClients();
-  setInterval(()=>{if(currentClientId)refreshCurrentPage();},30000);
+  // Periodic background refresh — every 30s. Two real concerns this
+  // addresses: (1) it should never wipe the screen to a "Loading..."
+  // blank state on a routine tick, only on a genuine first load, and
+  // (2) it must NEVER touch pages with live editable fields (SMS
+  // Templates, Email Sequence editor) — overwriting their innerHTML
+  // mid-edit would silently destroy whatever someone is in the middle
+  // of typing. Read-only pages (History, Bookings, Leads) refresh
+  // silently in the background instead.
+  setInterval(()=>{
+    if(!currentClientId) return;
+    const isEditingTemplates = currentPage==='sms' && smsSubTab==='templates';
+    const isEditingSequence  = currentPage==='email' && emailSubTab==='builder';
+    const isEditingSettings  = currentPage==='settings';
+    if(isEditingTemplates || isEditingSequence || isEditingSettings) return; // skip entirely — never overwrite live edits
+    refreshCurrentPage(true); // true = silent, no loading wipe
+  },30000);
 </script>
 </body>
 </html>
