@@ -3,9 +3,10 @@ const {
   getLeadsForFollowUp, getStalledLeads, getNurtureLeadsDue, updateLeadStatus, logActivity,
   getAttemptCount, moveToNurture, updateNurtureStep, getClientSettings,
   getDueScheduledSms, markScheduledSmsSent, markScheduledSmsSkipped, getLead,
+  getSmsTemplate, resolveTemplate, getEmailStepContent,
 } = require('../services/leads');
 const { triggerRetellCall } = require('../services/retell');
-const { sendSMS, getSMSMessage } = require('../services/twilio');
+const { sendSMS } = require('../services/twilio');
 const { lateSendDecision } = require('../services/timezone');
 const supabase = require('../supabase');
 
@@ -90,7 +91,9 @@ async function runFollowUpJob() {
         const result = await triggerRetellCall(lead, 3);
         await logActivity(lead.id, 'call', result.success ? 'no_answer' : 'bounced', 'Day 3 follow up call');
 
-        const message = getSMSMessage(lead, 2);
+        const { businessName } = await getClientSettings(lead.client_id);
+        const template = await getSmsTemplate(lead.client_id, 'no_answer_2');
+        const message = resolveTemplate(template, lead, businessName);
         const smsResult = await sendSMS(lead.phone, message);
         await logActivity(lead.id, 'sms', smsResult.success ? 'sent' : 'bounced', message);
 
@@ -100,7 +103,9 @@ async function runFollowUpJob() {
         const result = await triggerRetellCall(lead, 4);
         await logActivity(lead.id, 'call', result.success ? 'no_answer' : 'bounced', 'Final follow up call');
 
-        const message = getSMSMessage(lead, 3);
+        const { businessName } = await getClientSettings(lead.client_id);
+        const template = await getSmsTemplate(lead.client_id, 'no_answer_final');
+        const message = resolveTemplate(template, lead, businessName);
         const smsResult = await sendSMS(lead.phone, message);
         await logActivity(lead.id, 'sms', smsResult.success ? 'sent' : 'bounced', message);
 
@@ -160,10 +165,14 @@ async function runNurtureJob() {
         await logActivity(lead.id, 'call', result.success ? 'no_answer' : 'bounced', `Nurture call step ${step}`);
       }
 
-      // Always send email on nurture steps
-      // Email sending plugs into your existing email system
-      // Just log it here for now — connect your emailer later
-      await logActivity(lead.id, 'email', 'sent', `Nurture email step ${step}`);
+      // Send real nurture email content from the client's own configured
+      // sequence, instead of just logging a placeholder line. Falls back
+      // to a generic message if this step hasn't had content written
+      // for it yet (see getEmailStepContent in Leads.js), so the
+      // sequence still runs end to end even before a client finishes
+      // writing all their steps.
+      const { subject, body } = await getEmailStepContent(lead.client_id, step);
+      await logActivity(lead.id, 'email', 'sent', `${subject} — ${body}`);
 
       // Update nurture to next step — uses the client's own configured
       // intervals (settings page) instead of the same fixed schedule for
