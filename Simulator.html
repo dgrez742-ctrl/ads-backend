@@ -324,6 +324,7 @@
   // --------------------------------------------------------
   function triggerIncomingCall(data){
     currentLead = data.lead;
+    closeAudioGate(); // hard-mute any media element before anything else, regardless of prior clicks
 
     const initial = (currentLead.name || '?').charAt(0).toUpperCase();
     document.getElementById('icPhoto').textContent = initial;
@@ -351,6 +352,53 @@
     // muted and we never call startAudioPlayback() until Answer, so
     // nothing is heard in either direction while it's "ringing".
     connectRetellSilently(data.access_token);
+  }
+
+  // --------------------------------------------------------
+  // HARD AUDIO GATE — independent of browser gesture-tracking
+  //
+  // The mute()/unmute() calls below only ever control the MICROPHONE
+  // (confirmed against the SDK's actual source — setMicrophoneEnabled).
+  // The SPEAKER side (hearing the agent) was never actually gated by
+  // anything in this code at all — it was relying on the browser's own
+  // autoplay-block as its only protection, and that protection breaks
+  // the moment ANY click happens anywhere on the page for ANY reason
+  // (e.g. the tap-to-fullscreen handler further below) — browsers track
+  // "has this page been interacted with" as a page-level flag, not tied
+  // to which specific element was clicked. That's almost certainly why
+  // audio could start before Answer was ever pressed.
+  //
+  // Fix: directly force-mute every <audio>/<video> element the second
+  // it's created, via MutationObserver — a hard gate on the actual
+  // element itself, which doesn't depend on browser gesture state at
+  // all. LiveKit creates these internally when it attaches the agent's
+  // incoming audio track; there's never a direct reference to them any
+  // other way.
+  // --------------------------------------------------------
+  let audioGateOpen = false;
+
+  function forceMuteMediaElements(){
+    document.querySelectorAll('audio,video').forEach(el=>{
+      if(el.id==='ringtone') return; // the ringtone itself is supposed to play
+      if(!audioGateOpen) el.muted = true;
+    });
+  }
+
+  const mediaObserver = new MutationObserver(()=>forceMuteMediaElements());
+  mediaObserver.observe(document.body, { childList:true, subtree:true });
+  setInterval(forceMuteMediaElements, 200); // belt-and-suspenders in case attach() reuses an existing element instead of creating a new one
+
+  function openAudioGate(){
+    audioGateOpen = true;
+    document.querySelectorAll('audio,video').forEach(el=>{
+      if(el.id==='ringtone') return;
+      el.muted = false;
+    });
+  }
+
+  function closeAudioGate(){
+    audioGateOpen = false;
+    forceMuteMediaElements();
   }
 
   async function connectRetellSilently(accessToken){
@@ -407,6 +455,7 @@
   async function answerCall(){
     document.getElementById('ringtone').pause();
     if(navigator.vibrate) navigator.vibrate(0);
+    openAudioGate(); // the ONLY place this is ever called — same invariant as mic unmute below
 
     document.getElementById('callPhoto').textContent = (currentLead.name||'?').charAt(0).toUpperCase();
     document.getElementById('callName').textContent = currentLead.name || 'Unknown';
@@ -479,6 +528,7 @@
   async function declineCall(){
     document.getElementById('ringtone').pause();
     if(navigator.vibrate) navigator.vibrate(0);
+    closeAudioGate();
 
     if(retellClient){
       try{ retellClient.stopCall(); }catch(e){}
@@ -501,6 +551,7 @@
   // --------------------------------------------------------
   async function endCall(){
     clearInterval(callTimer);
+    closeAudioGate();
     if(retellClient){
       try{ retellClient.stopCall(); }catch(e){}
     }
