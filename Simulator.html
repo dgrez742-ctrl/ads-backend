@@ -235,6 +235,7 @@
   const API = 'https://ads-backend-production-d450.up.railway.app';
 
   let currentLead = null;
+  let pendingAccessToken = null; // OPTION B: holds the token between ring and Answer
   let pollTimer = null;
   let clockTimer = null;
   let callTimer = null;
@@ -324,7 +325,7 @@
   // --------------------------------------------------------
   function triggerIncomingCall(data){
     currentLead = data.lead;
-    closeAudioGate(); // hard-mute any media element before anything else, regardless of prior clicks
+    pendingAccessToken = data.access_token; // OPTION B: stored, not used yet — connection only happens on Answer
 
     const initial = (currentLead.name || '?').charAt(0).toUpperCase();
     document.getElementById('icPhoto').textContent = initial;
@@ -347,61 +348,32 @@
     // of guessing based on when the Retell session was technically ready.
     fetch(`${API}/simulator/ringing`, { method: 'POST' }).catch(()=>{});
 
-    // Silently connect the Retell web call session in the background.
-    // The session is fully live by the time the user answers — mic stays
-    // muted and we never call startAudioPlayback() until Answer, so
-    // nothing is heard in either direction while it's "ringing".
-    connectRetellSilently(data.access_token);
+    // OPTION B: no connectRetellSilently() call here at all. The Retell
+    // session genuinely does not exist yet — nothing to leak, no gate
+    // needed, because there is no live connection during ringing. The
+    // real trade-off: answerCall() now has to actually establish that
+    // connection, which takes real time (typically 1-3s) — felt as a
+    // pause right after answering, before the agent's first word. This
+    // is what's being tested against the old pre-warmed approach.
   }
 
   // --------------------------------------------------------
-  // HARD AUDIO GATE — independent of browser gesture-tracking
-  //
-  // The mute()/unmute() calls below only ever control the MICROPHONE
-  // (confirmed against the SDK's actual source — setMicrophoneEnabled).
-  // The SPEAKER side (hearing the agent) was never actually gated by
-  // anything in this code at all — it was relying on the browser's own
-  // autoplay-block as its only protection, and that protection breaks
-  // the moment ANY click happens anywhere on the page for ANY reason
-  // (e.g. the tap-to-fullscreen handler further below) — browsers track
-  // "has this page been interacted with" as a page-level flag, not tied
-  // to which specific element was clicked. That's almost certainly why
-  // audio could start before Answer was ever pressed.
-  //
-  // Fix: directly force-mute every <audio>/<video> element the second
-  // it's created, via MutationObserver — a hard gate on the actual
-  // element itself, which doesn't depend on browser gesture state at
-  // all. LiveKit creates these internally when it attaches the agent's
-  // incoming audio track; there's never a direct reference to them any
-  // other way.
+  // OPTION B NOTE: the hard audio-element mute gate that used to live
+  // here is no longer needed at all. Under the pre-warmed approach
+  // (Option A), a live connection sat open during ringing and had to be
+  // actively kept silent by force-muting every media element. Under
+  // Option B, no connection exists until Answer is clicked — there is
+  // nothing live to leak, so there's nothing left to gate.
   // --------------------------------------------------------
-  let audioGateOpen = false;
 
-  function forceMuteMediaElements(){
-    document.querySelectorAll('audio,video').forEach(el=>{
-      if(el.id==='ringtone') return; // the ringtone itself is supposed to play
-      if(!audioGateOpen) el.muted = true;
-    });
-  }
-
-  const mediaObserver = new MutationObserver(()=>forceMuteMediaElements());
-  mediaObserver.observe(document.body, { childList:true, subtree:true });
-  setInterval(forceMuteMediaElements, 200); // belt-and-suspenders in case attach() reuses an existing element instead of creating a new one
-
-  function openAudioGate(){
-    audioGateOpen = true;
-    document.querySelectorAll('audio,video').forEach(el=>{
-      if(el.id==='ringtone') return;
-      el.muted = false;
-    });
-  }
-
-  function closeAudioGate(){
-    audioGateOpen = false;
-    forceMuteMediaElements();
-  }
-
-  async function connectRetellSilently(accessToken){
+  // OPTION B: connection only ever happens here, triggered directly by
+  // the Answer click — never during ringing. No mute gate needed at
+  // all, because there is no live connection for any gate to protect
+  // against until this function runs. The real cost: startCall() itself
+  // takes real time (room join + auth + agent init), which is felt as
+  // a pause after answering, before the agent's first word — that's
+  // the trade-off being tested against the old pre-warmed approach.
+  async function connectAndGoLive(accessToken){
     try{
       if(!window.retellClientJsSdk){
         console.error('Retell SDK not loaded');
@@ -409,25 +381,6 @@
       }
       retellClient = new window.retellClientJsSdk.RetellWebClient();
 
-      // CRITICAL: mute happens here, synchronously, BEFORE startCall() is
-      // ever invoked — the SDK's audio defaults to live the instant the
-      // underlying connection opens, which can happen before call_started
-      // fires.
-      retellClient.mute();
-
-      // STRUCTURAL RULE: call_started is an automatic background event —
-      // it must NEVER touch audio (mute/unmute/startAudioPlayback) under
-      // any condition. The ONLY place audio is ever allowed to turn on is
-      // inside answerCall() itself, triggered by the actual button click.
-      // The previous version checked an `answerWasClicked` flag here and
-      // would unmute right inside this automatic handler if true — which
-      // meant audio could start from a background event whenever it
-      // happened to fire after the click, instead of always being
-      // initiated by the click itself. That's a race condition by
-      // design, not a deterministic trigger, which is exactly what
-      // produced "worked once, didn't the next time" behavior. This
-      // handler now does nothing but record that the room is ready;
-      // answerCall() is solely responsible for noticing that and acting.
       retellClient.on('call_started', () => {
         retellConnected = true;
       });
@@ -437,16 +390,16 @@
       retellClient.on('error', (err) => {
         console.error('Retell call error', err);
       });
+
       await retellClient.startCall({ accessToken });
-      // Re-assert mute immediately after startCall() resolves too, in
-      // case the room went live before call_started had a chance to
-      // fire. Always re-mute here unconditionally — there is no
-      // "answerWasClicked" exception anymore, since answerCall() never
-      // depends on this function to unmute on its behalf.
-      retellClient.mute();
+      // No mute() call at all — the connection is being created BECAUSE
+      // the person already answered, so going live immediately is
+      // correct here, not a leak to guard against.
+      await retellClient.startAudioPlayback();
     }catch(e){
-      console.error('Failed to pre-warm Retell call', e);
+      console.error('Failed to connect Retell call', e);
     }
+  }
   }
 
   // --------------------------------------------------------
@@ -455,55 +408,35 @@
   async function answerCall(){
     document.getElementById('ringtone').pause();
     if(navigator.vibrate) navigator.vibrate(0);
-    openAudioGate(); // the ONLY place this is ever called — same invariant as mic unmute below
 
     document.getElementById('callPhoto').textContent = (currentLead.name||'?').charAt(0).toUpperCase();
     document.getElementById('callName').textContent = currentLead.name || 'Unknown';
-    document.getElementById('callStatusTxt').textContent = 'Connected';
+    document.getElementById('callStatusTxt').textContent = 'Connecting...';
     showScreen('incallScreen');
 
     // Explicitly request mic permission HERE, synchronously inside the
-    // actual click handler — not deferred into an async event callback
-    // like call_started. Browsers can silently block getUserMedia-based
-    // prompts (which is what unmute()/setMicrophoneEnabled triggers
-    // internally) when they're not directly tied to a user gesture, with
-    // no visible error anywhere. This is almost certainly what caused
-    // the agent to not hear the person on a real call — the permission
-    // request was happening inside an async callback, not a click.
+    // actual click handler — not deferred into an async event callback.
+    // Browsers can silently block getUserMedia-based prompts when
+    // they're not directly tied to a user gesture, with no visible
+    // error anywhere.
     try{
       await navigator.mediaDevices.getUserMedia({ audio: true });
     }catch(e){
       console.error('Microphone permission denied or unavailable', e);
     }
 
-    // Record intent immediately. If the session is already connected,
-    // unmute right now. If call_started hasn't fired yet, the handler in
-    // connectRetellSilently() will unmute as soon as it does — so audio
-    // always starts one way or the other, instead of silently never
-    // starting when the click happens to land before that event.
-    // answerCall() is now the ONLY place audio is ever turned on — no
-    // exceptions, no background event acting on its behalf. If the
-    // Retell session isn't connected yet at the moment of the click,
-    // this waits for it directly, right here, rather than leaving that
-    // responsibility to call_started (which no longer touches audio at
-    // all). Short poll, capped at 5s as a sane upper bound — startCall()
-    // connecting takes a fraction of that in practice.
-    const waitForConnection = async () => {
-      const start = Date.now();
-      while(!retellConnected && (Date.now()-start) < 5000){
-        await new Promise(r=>setTimeout(r,50));
-      }
-    };
-    if(!retellConnected) await waitForConnection();
-
-    if(retellClient && retellConnected){
-      try{
-        retellClient.unmute();
-        await retellClient.startAudioPlayback();
-      }catch(e){ console.error('Failed to unmute Retell call', e); }
-    }else{
-      console.error('Retell session never connected within 5s of answering');
+    // OPTION B: the connection is created HERE, now, for the first time.
+    // This is the real trade-off being tested — startCall() takes real
+    // time (room join + auth + agent init), so there's a genuine pause
+    // here before the agent's first word, unlike the old pre-warmed
+    // version where this moment was instant. That pause is the cost of
+    // never having a live, gated connection sitting open during ringing.
+    if(pendingAccessToken){
+      await connectAndGoLive(pendingAccessToken);
+      pendingAccessToken = null;
     }
+
+    document.getElementById('callStatusTxt').textContent = 'Connected';
 
     callSeconds = 0;
     clearInterval(callTimer);
@@ -528,11 +461,10 @@
   async function declineCall(){
     document.getElementById('ringtone').pause();
     if(navigator.vibrate) navigator.vibrate(0);
-    closeAudioGate();
 
-    if(retellClient){
-      try{ retellClient.stopCall(); }catch(e){}
-    }
+    // OPTION B: nothing was ever connected while ringing — there's no
+    // live call to stop, just a pending token that's now irrelevant.
+    pendingAccessToken = null;
 
     showEnded('Declined', 'Logging as no answer…');
 
@@ -551,7 +483,6 @@
   // --------------------------------------------------------
   async function endCall(){
     clearInterval(callTimer);
-    closeAudioGate();
     if(retellClient){
       try{ retellClient.stopCall(); }catch(e){}
     }
