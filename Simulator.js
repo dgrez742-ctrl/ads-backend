@@ -26,25 +26,49 @@ let callStatus = 'idle';  // idle | connecting | ringing | answered | declined |
 // genuine readiness, not a guess.
 // --------------------------------------------------------
 function queueDemoWebCall(lead) {
-  callStatus = 'connecting';
-  console.log(`Demo call queued for lead ${lead.id} — creating Retell web call session...`);
+  callStatus = 'ringing'; // ringing starts immediately — nothing connected yet
+  console.log(`Demo call queued for lead ${lead.id} — ringing now, will connect to Retell in a few seconds`);
 
-  (async () => {
+  // Make the lead visible to the simulator's poll loop RIGHT AWAY, with
+  // no access_token yet — this is what lets the phone actually ring
+  // like a normal call, for a real few seconds, before any connection
+  // exists at all. Previously, ringing could only ever start AFTER the
+  // Retell session was already created, because lead info and the
+  // session were bundled into one object set at the same instant — so
+  // the ring always felt instantaneous/artificial rather than like a
+  // real call someone takes a moment to pick up.
+  pendingCall = {
+    lead: {
+      id: lead.id,
+      name: lead.name,
+      phone: lead.phone,
+      offer_seen: lead.offer_seen,
+    },
+    access_token: null,   // not ready yet — simulator must wait for this before allowing Answer to actually connect
+    call_id: null,
+    queued_at: new Date().toISOString(),
+  };
+
+  // 3-4 second natural ring delay (randomized within that range so it
+  // doesn't feel mechanically identical every time) before the Retell
+  // session creation even starts. By the time this resolves, the phone
+  // has already been visibly ringing for a few seconds — exactly the
+  // ordering asked for: ring first, connect quietly in the background
+  // partway through, so Answer feels instant despite ringing realistically.
+  const ringDelayMs = 3000 + Math.floor(Math.random() * 1000); // 3.0–4.0s
+
+  setTimeout(async () => {
     try {
       const webCall = await createRetellWebCall(lead);
-      pendingCall = {
-        lead: {
-          id: lead.id,
-          name: lead.name,
-          phone: lead.phone,
-          offer_seen: lead.offer_seen,
-        },
-        access_token: webCall.access_token,
-        call_id: webCall.call_id,
-        queued_at: new Date().toISOString(),
-      };
-      callStatus = 'ringing';
-      console.log(`Demo web call ready for lead ${lead.id} — call_id ${webCall.call_id}`);
+      // Update the SAME pendingCall object in place — the simulator may
+      // already be mid-ring by now and polling repeatedly; this just
+      // fills in the access_token once it's genuinely ready, without
+      // restarting the ring or creating a second incoming-call event.
+      if (pendingCall && pendingCall.lead.id === lead.id) {
+        pendingCall.access_token = webCall.access_token;
+        pendingCall.call_id = webCall.call_id;
+      }
+      console.log(`Demo web call ready for lead ${lead.id} — call_id ${webCall.call_id}, session now warm while still ringing`);
     } catch (err) {
       // axios hides the real reason behind a generic "Request failed with
       // status code 400" message — log the actual response body from
@@ -59,7 +83,7 @@ function queueDemoWebCall(lead) {
         console.error(`Failed to create demo web call for lead ${lead.id}:`, err.message);
       }
     }
-  })();
+  }, ringDelayMs);
 }
 
 // --------------------------------------------------------
@@ -170,6 +194,16 @@ function getActiveLeadId() {
   return activeCall ? activeCall.lead.id : null;
 }
 
+// Non-consuming peek at the active call's access_token — used while the
+// phone is already ringing (after takePendingCall() has already moved
+// it into activeCall) to check whether the delayed Retell session
+// creation has finished yet. Unlike takePendingCall(), this can be
+// polled repeatedly without clearing anything.
+function getActiveCallToken() {
+  if (!activeCall) return null;
+  return { access_token: activeCall.access_token, call_id: activeCall.call_id };
+}
+
 function clearActiveCall() {
   activeCall = null;
 }
@@ -194,6 +228,7 @@ module.exports = {
   queueDemoWebCall,
   takePendingCall,
   getActiveLeadId,
+  getActiveCallToken,
   clearActiveCall,
   getCallStatus,
   setCallStatus,
