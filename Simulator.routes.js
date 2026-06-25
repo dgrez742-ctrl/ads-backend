@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { takePendingCall, clearActiveCall, getCallStatus, setCallStatus, getActiveCallToken } = require('../services/simulator');
+const { takePendingCall, clearActiveCall, getCallStatus, setCallStatus } = require('../services/simulator');
 const {
   logActivity, updateLeadStatus, setLastAction, setLastAnsweredCallAt, getClientSettings,
   scheduleSms, getLead, getSmsTemplate, resolveTemplate, incrementAttemptCount, getAttemptCount,
@@ -29,20 +29,6 @@ router.get('/pending-call', (req, res) => {
     access_token: call.access_token,
     call_id: call.call_id,
   });
-});
-
-// --------------------------------------------------------
-// GET /simulator/active-call-token
-// Polled repeatedly by the simulator WHILE the phone is already ringing
-// on screen, to check whether the delayed Retell session creation (see
-// queueDemoWebCall's 3-4s ring delay) has finished yet. Unlike
-// /pending-call, this never consumes anything — it's a pure read of
-// whatever's currently in activeCall, safe to poll as many times as
-// needed until access_token is no longer null.
-// --------------------------------------------------------
-router.get('/active-call-token', (req, res) => {
-  const token = getActiveCallToken();
-  res.json(token || { access_token: null, call_id: null });
 });
 
 // --------------------------------------------------------
