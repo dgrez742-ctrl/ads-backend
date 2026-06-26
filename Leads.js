@@ -489,6 +489,76 @@ async function deleteEmailSequenceStep(clientId, stepOrder) {
   if (error) throw error;
 }
 
+// --------------------------------------------------------
+// DASHBOARD-FACING "Scheduled" views — unlike getDueScheduledSms() and
+// getNurtureLeadsDue() above (which only return items that are already
+// due, for the cron jobs to act on), these return EVERY still-pending
+// item for a given client, due or not, so the dashboard can show what's
+// coming up — not just what already fired.
+// --------------------------------------------------------
+
+async function getUpcomingSmsForClient(clientId) {
+  const { data: leads, error: leadsErr } = await supabase
+    .from('ldm_leads')
+    .select('id, name, phone')
+    .eq('client_id', clientId);
+
+  if (leadsErr) return [];
+  const leadIds = (leads || []).map(l => l.id);
+  if (leadIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('ldm_scheduled_sms')
+    .select('*')
+    .in('lead_id', leadIds)
+    .eq('status', 'scheduled')
+    .order('scheduled_for', { ascending: true });
+
+  if (error) return [];
+
+  const leadMap = Object.fromEntries(leads.map(l => [l.id, l]));
+  return (data || []).map(row => ({ ...row, lead: leadMap[row.lead_id] || null }));
+}
+
+async function getUpcomingEmailsForClient(clientId) {
+  const { data: leads, error: leadsErr } = await supabase
+    .from('ldm_leads')
+    .select('id, name, email')
+    .eq('client_id', clientId);
+
+  if (leadsErr) return [];
+  const leadIds = (leads || []).map(l => l.id);
+  if (leadIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('ldm_nurture_sequence')
+    .select('*')
+    .in('lead_id', leadIds)
+    .eq('active', true)
+    .order('next_send_at', { ascending: true });
+
+  if (error) return [];
+
+  const leadMap = Object.fromEntries(leads.map(l => [l.id, l]));
+  return (data || []).map(row => ({ ...row, lead: leadMap[row.lead_id] || null }));
+}
+
+// --------------------------------------------------------
+// DELETE LEAD — cascades to contact activity, scheduled SMS, nurture
+// sequence rows, and booking events automatically (all reference
+// ldm_leads(id) ON DELETE CASCADE in the schema), so this one delete
+// is genuinely complete on its own.
+// --------------------------------------------------------
+
+async function deleteLead(leadId) {
+  const { error } = await supabase
+    .from('ldm_leads')
+    .delete()
+    .eq('id', leadId);
+
+  if (error) throw error;
+}
+
 module.exports = {
   leadExists,
   createLead,
@@ -521,4 +591,7 @@ module.exports = {
   getEmailStepContent,
   saveEmailSequenceStep,
   deleteEmailSequenceStep,
+  getUpcomingSmsForClient,
+  getUpcomingEmailsForClient,
+  deleteLead,
 };
