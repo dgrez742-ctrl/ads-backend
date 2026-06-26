@@ -23,6 +23,9 @@ const {
   getEmailSequenceSteps,
   saveEmailSequenceStep,
   deleteEmailSequenceStep,
+  getUpcomingSmsForClient,
+  getUpcomingEmailsForClient,
+  deleteLead,
 } = require('./services/leads');
 const { sendSMS } = require('./services/twilio');
 
@@ -109,6 +112,18 @@ app.patch('/leads/:id', async (req, res) => {
   }
 });
 
+// Deletes the lead and, via ON DELETE CASCADE in the schema, everything
+// tied to it — contact activity, scheduled SMS, nurture sequence rows,
+// booking events. One delete, genuinely complete.
+app.delete('/leads/:id', async (req, res) => {
+  try {
+    await deleteLead(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/leads/:id/activity', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -128,6 +143,32 @@ app.get('/leads/:id/activity', async (req, res) => {
 // Returns every SMS or email activity row for a client's leads, with the
 // lead's name/phone attached, so the SMS and Email pages can show a flat
 // timeline without needing N+1 requests per lead.
+// ================================================
+
+// ================================================
+// SCHEDULED — upcoming SMS/emails not yet sent, for the "Scheduled"
+// section on the SMS and Email pages. Distinct from /activity/sms and
+// /activity/email below, which only show what's already gone out.
+// ================================================
+
+app.get('/clients/:id/scheduled/sms', async (req, res) => {
+  try {
+    const rows = await getUpcomingSmsForClient(req.params.id);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/clients/:id/scheduled/email', async (req, res) => {
+  try {
+    const rows = await getUpcomingEmailsForClient(req.params.id);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ================================================
 
 app.get('/clients/:id/activity/sms', async (req, res) => {
