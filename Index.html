@@ -546,7 +546,7 @@
       <div class="fg"><label>Offer Seen</label><input id="iOffer" placeholder="Free roofing inspection"/></div>
       <div class="fg" style="display:flex;align-items:center;gap:8px;flex-direction:row;">
         <input type="checkbox" id="iDemo" style="width:auto;" checked/>
-        <label for="iDemo" style="margin:0;font-size:12px;color:var(--muted);">Demo Lead (rings the phone simulator — never dials a real number)</label>
+        <label for="iDemo" style="margin:0;font-size:12px;color:var(--muted);">Demo Lead (rings the phone simulator, never dials a real number)</label>
       </div>
     </div>
     <div class="modal-foot">
@@ -629,7 +629,7 @@
 
   /* ── PAGE NAV ── */
   const PAGE_META = {
-    leads:    { title:'Leads',    sub:c=>`${c.business_name||c.name} — ${c.niche||''}` },
+    leads:    { title:'Leads',    sub:c=>`${c.business_name||c.name}, ${c.niche||''}` },
     sms:      { title:'SMS',      sub:c=>`${c.business_name||c.name}` },
     email:    { title:'Email',    sub:c=>`${c.business_name||c.name}` },
     bookings: { title:'Bookings', sub:c=>`${c.business_name||c.name}` },
@@ -739,11 +739,11 @@
   }
 
   const SMS_SLOT_META = [
-    { slot:'no_answer_1',      title:'1st missed-call text',          sub:'Sent immediately after the 1st no-answer — no timing rule applied', timing:false },
-    { slot:'no_answer_2',      title:'2nd missed-call text',          sub:'Sent immediately after the 2nd no-answer — no timing rule applied', timing:false },
-    { slot:'no_answer_final',  title:'Final missed-call text',        sub:'Sent immediately after the final no-answer attempt — no timing rule applied', timing:false },
-    { slot:'followup_morning', title:'Answered, not booked — morning variant', sub:'Sent the next morning, if the call was answered in the evening', timing:true },
-    { slot:'followup_evening', title:'Answered, not booked — evening variant', sub:'Sent that same evening, if the call was answered in the morning', timing:true },
+    { slot:'no_answer_1',      title:'1st missed-call text',          sub:'Sent right after the 1st no-answer. Goes out immediately, no timing rule.', timing:false },
+    { slot:'no_answer_2',      title:'2nd missed-call text',          sub:'Sent right after the 2nd no-answer. Goes out immediately, no timing rule.', timing:false },
+    { slot:'no_answer_final',  title:'Final missed-call text',        sub:'Sent right after the final no-answer attempt. Goes out immediately, no timing rule.', timing:false },
+    { slot:'followup_morning', title:'Answered, not booked, morning variant', sub:'Sent the next morning, if the call was answered in the evening', timing:true },
+    { slot:'followup_evening', title:'Answered, not booked, evening variant', sub:'Sent that same evening, if the call was answered in the morning', timing:true },
   ];
 
   const TEMPLATE_VARS = ['first_name','offer','business_name'];
@@ -1189,7 +1189,7 @@
           <div class="act-item" style="flex-direction:column;align-items:flex-start;">
             <div style="display:flex;gap:10px;width:100%;align-items:flex-start;">
               <span class="act-type">${a.activity_type}</span>
-              <span class="act-out"><strong>${a.outcome}</strong>${a.notes?' — '+escapeHtml(a.notes):''}${sentimentTag}</span>
+              <span class="act-out"><strong>${a.outcome}</strong>${a.notes?', '+escapeHtml(a.notes):''}${sentimentTag}</span>
               ${durationTag}
               <span class="act-time">${timeAgo(a.created_at)}</span>
             </div>
@@ -1198,6 +1198,12 @@
           </div>`;
         }).join('');
       }
+
+      // Now that real activity data has loaded, refresh the Next Step
+      // text using the most recent call's actual summary if one exists,
+      // instead of the generic status-based guess shown while loading.
+      const mostRecentCallWithSummary = (acts||[]).find(a => a.activity_type==='call' && a.call_summary);
+      document.getElementById('pNextStep').textContent = nextStepFor(lead, mostRecentCallWithSummary);
     }catch(e){console.error(e);}
   }
 
@@ -1208,7 +1214,7 @@
 
   function closePanel(){document.getElementById('panelOverlay').classList.remove('open');}
 
-  function nextStepFor(lead){
+  function nextStepFor(lead, recentCallActivity){
     const attempts = lead.attempt_count || 0;
     switch(lead.status){
       case 'new':
@@ -1219,7 +1225,14 @@
         if (attempts === 3) return "One more call and text are scheduled, then we'll hold off for a while.";
         return "We've made our last attempt for now. They'll start hearing from us occasionally by email instead.";
       case 'contacted':
-        return "We spoke with this lead. What happens next depends on how that call went.";
+        // Report what actually happened on the call, once Retell's real
+        // summary has arrived, instead of guessing. Falls back to the
+        // generic line only while that data is still loading or hasn't
+        // come through yet (e.g. before the Retell webhook URL is set).
+        if (recentCallActivity && recentCallActivity.call_summary){
+          return recentCallActivity.call_summary;
+        }
+        return "We spoke with this lead. Waiting on the call summary to come through.";
       case 'booked':
         return "All set. This appointment is confirmed, nothing else needed.";
       case 'dead':
