@@ -61,7 +61,7 @@ router.post('/answer', async (req, res) => {
       // only the last_action text was. Fixed: status now moves to
       // 'contacted' the moment the call is answered.
       await updateLeadStatus(lead_id, 'contacted', { last_action: 'Answered call' });
-      await logActivity(lead_id, 'call', 'answered', 'Demo call answered');
+      await logActivity(lead_id, 'call', 'answered', 'Call answered');
     }
     res.json({ success: true });
   } catch (err) {
@@ -85,7 +85,7 @@ router.post('/decline', async (req, res) => {
     setCallStatus('declined');
     if (lead_id) {
       await updateLeadStatus(lead_id, 'attempted', { last_action: 'No answer' });
-      await logActivity(lead_id, 'call', 'no_answer', 'Demo call declined');
+      await logActivity(lead_id, 'call', 'no_answer', 'Call declined');
 
       // attempt_count was already incremented by /call at the moment
       // this call was triggered (see Index.js) — read it here rather
@@ -119,7 +119,7 @@ router.post('/end', async (req, res) => {
     setCallStatus('ended');
     if (lead_id) {
       await setLastAction(lead_id, 'Call completed');
-      await logActivity(lead_id, 'call', 'answered', `Demo call ended — duration ${duration || 0}s`);
+      await logActivity(lead_id, 'call', 'answered', `Call ended, duration ${duration || 0}s`);
 
       const answeredAt = new Date();
       await setLastAnsweredCallAt(lead_id, answeredAt);
