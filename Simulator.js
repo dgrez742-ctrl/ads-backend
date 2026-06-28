@@ -148,6 +148,17 @@ function buildReceptionistVariables(lead) {
     // Lead/demo context — declared in the prompt's "Demo Caller Context"
     // section so the agent actually uses them, rather than sending
     // variables the prompt never references.
+    //
+    // lead_id is the critical one for booking accuracy: demo calls never
+    // send a real caller_phone (the number the agent hears is whatever
+    // the demo caller speaks on the mic, not lead.phone), so phone-based
+    // lookup in /webhook/booking-event is NOT reliable here — two demo
+    // leads close together can collide on a similar/spoken number. Once
+    // lead_id is also declared on the booking function schemas in Retell
+    // (see book_appointment / reschedule_appointment / cancel_appointment),
+    // the agent can pass it straight through and n8n can match the exact
+    // lead every time, demo or real.
+    lead_id: String(lead.id || ''),
     lead_name: lead.name || 'there',
     offer_seen: lead.offer_seen || 'our services',
   };
