@@ -41,7 +41,16 @@ async function triggerRetellCall(lead, attemptNumber) {
   // is_followup/is_nurture were being sent as a number and booleans,
   // which is the actual cause of "Request failed with status code 400"
   // on every real outbound call.
+  //
+  // lead_id was MISSING here entirely — every webhook handler downstream
+  // (/webhook/retell, /webhook/retell-call-details, and the n8n booking
+  // workflow via /webhook/booking-event) expects Retell to hand lead_id
+  // back via retell_llm_dynamic_variables, but it was never sent in the
+  // first place, so that path was always silently falling through to the
+  // less reliable phone-number lookup. tenant_id is also sent (same
+  // value as client_id) since the Retell function schemas use that name.
   const callContext = {
+    lead_id: String(lead.id || ''),
     lead_name: lead.name || 'there',
     offer_seen: lead.offer_seen || 'roofing services',
     attempt_number: String(attemptNumber),
@@ -49,6 +58,7 @@ async function triggerRetellCall(lead, attemptNumber) {
     is_followup: attemptNumber > 1 ? 'true' : 'false',
     is_nurture: lead.status === 'nurture' ? 'true' : 'false',
     client_id: lead.client_id || '',
+    tenant_id: lead.client_id || '',
   };
 
   try {
