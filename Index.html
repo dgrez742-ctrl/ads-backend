@@ -484,6 +484,11 @@
         <div class="next-step-val" id="pNextStep">—</div>
       </div>
 
+      <div class="activity-log">
+        <h3>Call History</h3>
+        <div id="pCalls"><div style="color:var(--muted);font-size:12px;">Loading...</div></div>
+      </div>
+
       <div class="internal-toggle" onclick="toggleInternal()">
         <span id="internalToggleLabel">Show internal details</span>
         <span id="internalToggleArrow">▾</span>
@@ -1160,6 +1165,7 @@
     document.getElementById('pStatus').value=lead.status;
     document.getElementById('pNextStep').textContent=nextStepFor(lead);
     document.getElementById('pActivity').innerHTML='<div style="color:var(--muted);font-size:12px;">Loading...</div>';
+    document.getElementById('pCalls').innerHTML='<div style="color:var(--muted);font-size:12px;">Loading...</div>';
     document.getElementById('internalPanel').classList.remove('open');
     document.getElementById('internalToggleLabel').textContent='Show internal details';
     document.getElementById('internalToggleArrow').textContent='▾';
@@ -1205,6 +1211,65 @@
       const mostRecentCallWithSummary = (acts||[]).find(a => a.activity_type==='call' && a.call_summary);
       document.getElementById('pNextStep').textContent = nextStepFor(lead, mostRecentCallWithSummary);
     }catch(e){console.error(e);}
+
+    // Call History — separate fetch from /activity above. Reads the
+    // dedicated ldm_calls table (transcript, summary, sentiment,
+    // outcome, duration), so it stays correct even though plain
+    // activity rows (SMS sends, no-answer attempts) never carry these
+    // fields. Shown directly under Status/Next Step, not hidden behind
+    // "Show internal details" — call content is core info, not
+    // internal debugging.
+    try{
+      const calls = await api(`/leads/${leadId}/calls`);
+      const callsEl = document.getElementById('pCalls');
+      if(!calls || calls.length===0){
+        callsEl.innerHTML = '<div style="color:var(--muted);font-size:12px;">No calls yet.</div>';
+      } else {
+        callsEl.innerHTML = calls.map((c,i)=>{
+          const outcomeLabel = c.outcome
+            ? c.outcome.replace(/_/g,' ')
+            : (c.call_status || 'completed');
+          const statusBadgeClass = c.outcome==='not_interested' ? 'dead'
+            : c.outcome==='booked' ? 'booked'
+            : c.outcome==='voicemail' ? 'new'
+            : c.outcome==='call_back_later' ? 'attempted'
+            : 'contacted';
+          const sentimentTag = c.sentiment
+            ? `<span class="badge ${c.sentiment==='negative'?'dead':c.sentiment==='positive'?'booked':'new'}" style="margin-left:6px;">${escapeHtml(c.sentiment)}</span>` : '';
+          const durationTag = c.duration_seconds
+            ? `<span class="act-duration">${Math.floor(c.duration_seconds/60)}:${String(c.duration_seconds%60).padStart(2,'0')}</span>` : '';
+          const summaryLine = c.summary
+            ? `<div class="act-summary"><strong>Summary:</strong> ${escapeHtml(c.summary)}</div>` : '';
+          const transcriptToggle = c.transcript
+            ? `<div class="act-transcript-toggle" onclick="toggleCallTranscript(${i})">▾ View transcript</div>
+               <div class="act-transcript" id="call_transcript_${i}" style="display:none;">${escapeHtml(c.transcript)}</div>` : '';
+          const recordingLink = c.recording_url
+            ? `<div style="margin-top:4px;"><a href="${c.recording_url}" target="_blank" rel="noopener" style="font-size:11px;">▶ Listen to recording</a></div>` : '';
+
+          return `
+          <div class="act-item" style="flex-direction:column;align-items:flex-start;">
+            <div style="display:flex;gap:10px;width:100%;align-items:flex-start;">
+              <span class="badge ${statusBadgeClass}">${escapeHtml(outcomeLabel)}</span>
+              ${durationTag}
+              ${sentimentTag}
+              <span class="act-time">${timeAgo(c.created_at)}</span>
+            </div>
+            ${summaryLine}
+            ${transcriptToggle}
+            ${recordingLink}
+          </div>`;
+        }).join('');
+      }
+    }catch(e){
+      console.error(e);
+      document.getElementById('pCalls').innerHTML = '<div style="color:var(--muted);font-size:12px;">Could not load calls.</div>';
+    }
+  }
+
+  function toggleCallTranscript(i){
+    const el = document.getElementById(`call_transcript_${i}`);
+    if(!el) return;
+    el.style.display = el.style.display==='none' ? 'block' : 'none';
   }
 
   function toggleTranscript(i){
