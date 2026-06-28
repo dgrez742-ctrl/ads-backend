@@ -357,7 +357,17 @@ router.post('/booking-event', async (req, res) => {
       return res.status(400).json({ error: 'event_type must be booked, rescheduled, or cancelled' });
     }
 
-    let resolvedLeadId = lead_id;
+    // GUARD: n8n's HTTP Request node has a known quirk where a JS
+    // `undefined` value inside a JSON-body object-literal expression can
+    // get serialized as the literal string "undefined" over the wire,
+    // instead of being omitted or sent as null. Without this guard,
+    // that string would pass the `!resolvedLeadId` falsy check below (a
+    // non-empty string is truthy) and get used as a real lead_id —
+    // silently breaking the phone-number fallback this endpoint exists
+    // to provide. Treat those literal strings the same as not provided.
+    const cleanLeadId = (lead_id && lead_id !== 'undefined' && lead_id !== 'null') ? lead_id : null;
+
+    let resolvedLeadId = cleanLeadId;
     if (!resolvedLeadId && phone) {
       const supabase = require('../supabase');
       const { data } = await supabase
