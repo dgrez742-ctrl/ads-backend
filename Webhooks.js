@@ -58,7 +58,7 @@ router.post('/meta', async (req, res) => {
     if (isDemo) {
       // DEMO PATH — queue a web call for the simulator. No real phone call.
       queueDemoWebCall(lead);
-      await setLastActionSafe(lead.id, 'Demo call queued');
+      await setLastActionSafe(lead.id, 'Call in progress');
       return res.status(200).json({ success: true, leadId: lead.id, demo: true });
     }
 
