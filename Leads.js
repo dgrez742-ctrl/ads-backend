@@ -550,6 +550,97 @@ async function getUpcomingEmailsForClient(clientId) {
 // is genuinely complete on its own.
 // --------------------------------------------------------
 
+// --------------------------------------------------------
+// CALLS — dedicated table for call records (transcript, summary,
+// recording_url, duration_seconds), separate from the generic
+// ldm_contact_activity log. retell_call_id is UNIQUE in the schema,
+// so getCallByRetellId() lets every caller check-before-insert and
+// avoid ever recording the same call twice if Retell retries a
+// webhook delivery.
+// --------------------------------------------------------
+
+// Look up a call by Retell's call_id — used to dedup before inserting.
+// Returns null if not found (does NOT throw on "no rows", same
+// convention as getAppointmentByLead-style lookups elsewhere).
+async function getCallByRetellId(retellCallId) {
+  if (!retellCallId) return null;
+
+  const { data, error } = await supabase
+    .from('ldm_calls')
+    .select('*')
+    .eq('retell_call_id', retellCallId)
+    .single();
+
+  if (error && error.code !== 'PGRST116') throw error;
+  return data || null;
+}
+
+// Save a call record. Call this AFTER checking getCallByRetellId() —
+// it does not dedup internally, so the caller controls exactly when a
+// duplicate is skipped vs. when fields should be updated instead.
+async function saveCall(leadId, callData) {
+  const {
+    retell_call_id,
+    call_status,
+    duration_seconds,
+    transcript,
+    summary,
+    sentiment,
+    recording_url,
+    outcome,
+    started_at,
+    ended_at,
+  } = callData;
+
+  const { data, error } = await supabase
+    .from('ldm_calls')
+    .insert([{
+      lead_id: leadId,
+      retell_call_id: retell_call_id || null,
+      call_status: call_status || 'answered',
+      duration_seconds: duration_seconds || 0,
+      transcript: transcript || null,
+      summary: summary || null,
+      sentiment: sentiment || null,
+      recording_url: recording_url || null,
+      outcome: outcome || null,
+      started_at: started_at || new Date().toISOString(),
+      ended_at: ended_at || new Date().toISOString(),
+    }])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Update an existing call row in place (used when call_analyzed arrives
+// after call_ended already created the row — same call_id, more data).
+async function updateCallByRetellId(retellCallId, updates) {
+  const { data, error } = await supabase
+    .from('ldm_calls')
+    .update(updates)
+    .eq('retell_call_id', retellCallId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Get all calls for a lead, most recent first — for the dashboard's
+// call-history view on a lead's detail page.
+async function getCallsByLead(leadId) {
+  const { data, error } = await supabase
+    .from('ldm_calls')
+    .select('*')
+    .eq('lead_id', leadId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
 async function deleteLead(leadId) {
   const { error } = await supabase
     .from('ldm_leads')
@@ -594,4 +685,8 @@ module.exports = {
   getUpcomingSmsForClient,
   getUpcomingEmailsForClient,
   deleteLead,
+  getCallByRetellId,
+  saveCall,
+  updateCallByRetellId,
+  getCallsByLead,
 };
