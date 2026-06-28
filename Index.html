@@ -1204,12 +1204,6 @@
           </div>`;
         }).join('');
       }
-
-      // Now that real activity data has loaded, refresh the Next Step
-      // text using the most recent call's actual summary if one exists,
-      // instead of the generic status-based guess shown while loading.
-      const mostRecentCallWithSummary = (acts||[]).find(a => a.activity_type==='call' && a.call_summary);
-      document.getElementById('pNextStep').textContent = nextStepFor(lead, mostRecentCallWithSummary);
     }catch(e){console.error(e);}
 
     // Call History — separate fetch from /activity above. Reads the
@@ -1260,6 +1254,19 @@
           </div>`;
         }).join('');
       }
+
+      // Refresh Next Step using the most recent call's REAL summary,
+      // now that it's loaded. FIX: this previously searched the
+      // /activity rows for a.call_summary — a field that only ever
+      // existed on the old logActivity()-based call records. Since
+      // call details moved to the dedicated ldm_calls table, that
+      // field no longer exists on activity rows at all, so Next Step
+      // was permanently stuck on the generic "waiting on the call
+      // summary" text even when a real summary was sitting right there
+      // in Call History. calls[] is already ordered most-recent-first
+      // by getCallsByLead, so the first one with a summary is correct.
+      const mostRecentCallWithSummary = (calls||[]).find(c => c.summary);
+      document.getElementById('pNextStep').textContent = nextStepFor(lead, mostRecentCallWithSummary);
     }catch(e){
       console.error(e);
       document.getElementById('pCalls').innerHTML = '<div style="color:var(--muted);font-size:12px;">Could not load calls.</div>';
@@ -1294,8 +1301,12 @@
         // summary has arrived, instead of guessing. Falls back to the
         // generic line only while that data is still loading or hasn't
         // come through yet (e.g. before the Retell webhook URL is set).
-        if (recentCallActivity && recentCallActivity.call_summary){
-          return recentCallActivity.call_summary;
+        // recentCallActivity is now a row from ldm_calls (via
+        // getCallsByLead), so the field is `summary`, not the old
+        // `call_summary` name from the previous ldm_contact_activity
+        // shape.
+        if (recentCallActivity && recentCallActivity.summary){
+          return recentCallActivity.summary;
         }
         return "We spoke with this lead. Waiting on the call summary to come through.";
       case 'booked':
