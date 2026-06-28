@@ -13,7 +13,7 @@
       --card:     #f7f7f7;
       --border:   #e5e5e5;
       --text:     #111111;
-      --muted:    #8a8a8a;
+      --muted:    #595959;
       --accent:   #111111;
       --accent-text: #ffffff;
 
@@ -32,7 +32,7 @@
       background:var(--bg);
       color:var(--text);
       font-family:'Inter',sans-serif;
-      font-size:14px;
+      font-size:16px;
       line-height:1.5;
       display:flex;
       flex-direction:column;
@@ -48,7 +48,7 @@
     .menu-btn{display:none;background:none;border:none;color:var(--text);cursor:pointer;padding:4px;font-size:20px;}
 
     .logo{
-      font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;
+      font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;
       color:var(--text);letter-spacing:0.06em;white-space:nowrap;flex-shrink:0;
     }
 
@@ -58,9 +58,9 @@
       transition:background 0.15s;min-width:0;
     }
     .switcher:hover{background:var(--card);}
-    .switcher .sw-name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
-    .switcher .sw-niche{font-size:11px;color:var(--muted);white-space:nowrap;}
-    .switcher .sw-arrow{font-size:10px;color:var(--muted);margin-left:2px;}
+    .switcher .sw-name{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+    .switcher .sw-niche{font-size:13px;color:var(--muted);white-space:nowrap;}
+    .switcher .sw-arrow{font-size:12px;color:var(--muted);margin-left:2px;}
 
     .dropdown{
       display:none;position:absolute;top:50px;left:16px;
@@ -73,30 +73,30 @@
     .dropdown-item:last-child{border-bottom:none;}
     .dropdown-item:hover{background:var(--card);}
     .dropdown-item.active{background:var(--card);}
-    .dropdown-item .dname{font-weight:500;font-size:12px;}
-    .dropdown-item .dniche{font-size:10px;color:var(--muted);margin-top:1px;}
-    .dropdown-add{padding:10px 14px;cursor:pointer;font-size:12px;color:var(--muted);border-top:1px solid var(--border);}
+    .dropdown-item .dname{font-weight:500;font-size:14px;}
+    .dropdown-item .dniche{font-size:12px;color:var(--muted);margin-top:1px;}
+    .dropdown-add{padding:10px 14px;cursor:pointer;font-size:14px;color:var(--muted);border-top:1px solid var(--border);}
     .dropdown-add:hover{background:var(--card);color:var(--text);}
 
     .nav-right{display:flex;gap:8px;align-items:center;flex-shrink:0;}
 
     /* ── BUTTONS ── */
     .btn{
-      padding:7px 14px;border-radius:5px;font-size:12px;font-weight:500;
+      padding:7px 14px;border-radius:5px;font-size:14px;font-weight:500;
       cursor:pointer;border:1px solid var(--border);background:var(--bg);
       color:var(--text);transition:all 0.15s;font-family:'Inter',sans-serif;white-space:nowrap;
     }
     .btn:hover{background:var(--card);}
     .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text);font-weight:600;}
     .btn.primary:hover{opacity:0.85;}
-    .btn.sm{padding:5px 10px;font-size:11px;}
+    .btn.sm{padding:5px 10px;font-size:13px;}
     .btn.call{background:#e8f5e8;border-color:#bfe3bf;color:#1a7a1a;}
     .btn.call:hover{background:#dcefdc;}
 
     /* ── CALLING BAR ── */
     .calling-bar{
       display:none;background:#e8f5e8;border-bottom:1px solid #bfe3bf;
-      padding:8px 16px;font-size:12px;color:#1a7a1a;align-items:center;gap:8px;flex-shrink:0;
+      padding:8px 16px;font-size:14px;color:#1a7a1a;align-items:center;gap:8px;flex-shrink:0;
     }
     .calling-bar.show{display:flex;}
     .calling-dot{width:8px;height:8px;border-radius:50%;background:#1a7a1a;animation:pulse 1s infinite;}
@@ -114,7 +114,7 @@
     .sidebar-backdrop.show{display:block;}
 
     .navitem{
-      padding:9px 16px;font-size:12px;display:flex;align-items:center;gap:9px;
+      padding:9px 16px;font-size:14px;display:flex;align-items:center;gap:9px;
       cursor:pointer;color:var(--muted);transition:all 0.15s;
     }
     .navitem:hover{color:var(--text);background:var(--card);}
@@ -129,20 +129,20 @@
       display:flex;align-items:center;justify-content:space-between;
       flex-shrink:0;gap:12px;flex-wrap:wrap;
     }
-    .page-head h1{font-size:15px;font-weight:600;}
-    .page-head .sub{font-size:11px;color:var(--muted);margin-top:2px;}
+    .page-head h1{font-size:17px;font-weight:700;}
+    .page-head .sub{font-size:13px;color:var(--muted);margin-top:2px;}
 
     /* ── STATS ── */
     .stats{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;}
     .stat{padding:12px 16px;flex:1;min-width:78px;white-space:nowrap;border-right:1px solid var(--border);}
     .stat:last-child{border-right:none;}
     .stat-val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;}
-    .stat-lbl{font-size:9px;color:var(--muted);margin-top:2px;letter-spacing:0.04em;text-transform:uppercase;}
+    .stat-lbl{font-size:11px;color:var(--muted);margin-top:2px;letter-spacing:0.04em;text-transform:uppercase;}
 
     /* ── FILTERS ── */
     .filters{padding:10px 20px;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-shrink:0;overflow-x:auto;}
     .fbtn{
-      padding:4px 12px;border-radius:20px;font-size:12px;cursor:pointer;
+      padding:4px 12px;border-radius:20px;font-size:14px;cursor:pointer;
       border:1px solid var(--border);background:var(--bg);color:var(--muted);
       transition:all 0.15s;white-space:nowrap;flex-shrink:0;font-family:'Inter',sans-serif;
     }
@@ -152,7 +152,7 @@
     /* ── SUB TABS (Templates/Sequence vs History, inside SMS & Email pages) ── */
     .subtabs{display:flex;gap:4px;padding:10px 20px 0;border-bottom:1px solid var(--border);flex-shrink:0;}
     .stbtn{
-      padding:8px 4px;margin-right:14px;font-size:12px;font-weight:500;color:var(--muted);
+      padding:8px 4px;margin-right:14px;font-size:14px;font-weight:500;color:var(--muted);
       background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;
       transition:all 0.15s;font-family:'Inter',sans-serif;
     }
@@ -160,7 +160,7 @@
     .stbtn.active{color:var(--text);border-bottom-color:var(--accent);}
 
     .section-label{
-      font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;
+      font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;
       letter-spacing:0.06em;padding:14px 0 6px;
     }
     .leads-wrap .section-label:first-child{padding-top:4px;}
@@ -175,17 +175,17 @@
 
     .lead-row1{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
     .lead-name-wrap{display:flex;align-items:center;gap:8px;min-width:0;}
-    .lead-name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .lead-phone{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap;}
+    .lead-name{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .lead-phone{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);white-space:nowrap;}
     .lead-row2{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
-    .lead-last{font-size:11px;color:var(--muted);}
+    .lead-last{font-size:13px;color:var(--muted);}
     .lead-last strong{color:var(--text);}
     .lead-meta{display:flex;gap:12px;align-items:center;}
-    .lead-attempts,.lead-time{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);}
+    .lead-attempts,.lead-time{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--muted);}
 
     .badge{
       display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;
-      font-size:10px;font-weight:600;white-space:nowrap;flex-shrink:0;
+      font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0;
     }
     .badge.new{background:var(--new);color:var(--new-t);}
     .badge.attempted{background:var(--attempted);color:var(--attempted-t);}
@@ -195,7 +195,7 @@
     .badge.nurture{background:var(--nurture);color:var(--nurture-t);}
 
     .empty{padding:60px 20px;text-align:center;color:var(--muted);}
-    .empty h3{font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px;}
+    .empty h3{font-size:17px;font-weight:600;color:var(--text);margin-bottom:8px;}
 
     /* ── PAGE CONTAINERS ── */
     #pageLeads,#pageSms,#pageEmail,#pageBookings,#pageSettings{
@@ -213,41 +213,41 @@
     }
     .panel-overlay.open .panel{transform:translateX(0);}
     .panel-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0;}
-    .panel-head h2{font-size:15px;font-weight:600;}
+    .panel-head h2{font-size:17px;font-weight:600;}
     .panel-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;padding:0;}
     .panel-close:hover{color:var(--text);}
     .panel-body{flex:1;overflow-y:auto;padding:16px 20px;}
     .panel-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;}
 
-    .field{padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:13px;gap:12px;}
+    .field{padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:15px;gap:12px;}
     .field:last-child{border-bottom:none;}
     .field-lbl{color:var(--muted);flex-shrink:0;}
-    .field-val{font-weight:500;text-align:right;word-break:break-all;}
+    .field-val{font-weight:700;text-align:right;word-break:break-all;}
 
-    .status-sel{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:4px;font-size:12px;font-family:'Inter',sans-serif;cursor:pointer;}
+    .status-sel{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:4px;font-size:14px;font-family:'Inter',sans-serif;cursor:pointer;}
 
     .next-step-box{margin-top:16px;padding:12px 14px;border-radius:6px;background:#e8f5e8;border:1px solid #bfe3bf;}
-    .next-step-lbl{font-size:10px;color:#1a7a1a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;font-weight:600;}
-    .next-step-val{font-size:13px;color:var(--text);}
+    .next-step-lbl{font-size:12px;color:#1a7a1a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;font-weight:600;}
+    .next-step-val{font-size:15px;color:var(--text);}
 
-    .internal-toggle{margin-top:16px;padding:10px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);cursor:pointer;user-select:none;}
+    .internal-toggle{margin-top:16px;padding:10px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--muted);cursor:pointer;user-select:none;}
     .internal-toggle:hover{color:var(--text);}
     .internal-panel{display:none;}
     .internal-panel.open{display:block;}
 
     .activity-log{margin-top:16px;}
-    .activity-log h3{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;}
-    .act-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;}
+    .activity-log h3{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;}
+    .act-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px;}
     .act-item:last-child{border-bottom:none;}
-    .act-type{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text);min-width:44px;text-transform:uppercase;padding-top:1px;font-weight:600;}
+    .act-type{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);min-width:44px;text-transform:uppercase;padding-top:1px;font-weight:600;}
     .act-out{color:var(--muted);flex:1;}
     .act-out strong{color:var(--text);}
-    .act-duration{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap;}
-    .act-summary{font-size:11px;color:var(--text);margin-top:6px;padding:8px 10px;background:var(--card);border-radius:5px;width:100%;line-height:1.4;}
-    .act-transcript-toggle{font-size:11px;color:var(--muted);cursor:pointer;margin-top:6px;}
+    .act-duration{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);white-space:nowrap;}
+    .act-summary{font-size:13px;color:var(--text);margin-top:6px;padding:8px 10px;background:var(--card);border-radius:5px;width:100%;line-height:1.4;}
+    .act-transcript-toggle{font-size:13px;color:var(--muted);cursor:pointer;margin-top:6px;}
     .act-transcript-toggle:hover{color:var(--text);}
-    .act-transcript{font-size:11px;color:var(--text);margin-top:6px;padding:10px;background:var(--card);border-radius:5px;width:100%;line-height:1.5;white-space:pre-wrap;max-height:200px;overflow-y:auto;}
-    .act-time{color:var(--muted);white-space:nowrap;font-size:11px;}
+    .act-transcript{font-size:13px;color:var(--text);margin-top:6px;padding:10px;background:var(--card);border-radius:5px;width:100%;line-height:1.5;white-space:pre-wrap;max-height:200px;overflow-y:auto;}
+    .act-time{color:var(--muted);white-space:nowrap;font-size:13px;}
 
     .sim-btn-row{display:flex;flex-wrap:wrap;gap:6px;}
 
@@ -260,43 +260,43 @@
     .modal-overlay.open{display:flex;}
     .modal{background:var(--bg);border:1px solid var(--border);border-radius:8px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
     .modal-head{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
-    .modal-head h2{font-size:15px;font-weight:600;}
+    .modal-head h2{font-size:17px;font-weight:600;}
     .modal-body{padding:16px 20px;}
     .modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
     .fg{margin-bottom:14px;}
-    .fg label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;}
-    .fg input,.fg select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:5px;font-size:13px;font-family:'Inter',sans-serif;}
+    .fg label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px;}
+    .fg input,.fg select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:5px;font-size:15px;font-family:'Inter',sans-serif;}
     .fg input:focus,.fg select:focus{outline:none;border-color:var(--accent);}
 
     /* ── SETTINGS PAGE ── */
     .settings-form{padding:20px;max-width:480px;height:100%;overflow-y:auto;}
     .settings-section{margin-bottom:24px;}
-    .settings-section h3{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;}
+    .settings-section h3{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;}
     .settings-row{display:flex;gap:12px;margin-bottom:12px;align-items:flex-end;}
     .settings-row .fg{flex:1;margin-bottom:0;}
-    .settings-hint{font-size:11px;color:var(--muted);margin-top:-6px;margin-bottom:12px;}
+    .settings-hint{font-size:13px;color:var(--muted);margin-top:-6px;margin-bottom:12px;}
 
     /* ── SMS TEMPLATE COMPOSER ── */
     .composer-wrap{padding:16px 20px;max-width:640px;}
     .template-card{border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:14px;}
     .template-card.timing{border-color:#bfe3bf;background:#f7fcf7;}
     .template-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:10px;}
-    .template-title{font-size:13px;font-weight:600;}
-    .template-sub{font-size:11px;color:var(--muted);margin-top:2px;}
+    .template-title{font-size:15px;font-weight:600;}
+    .template-sub{font-size:13px;color:var(--muted);margin-top:2px;}
     .var-pill{
       display:inline-block;background:var(--contacted);color:var(--contacted-t);
-      font-size:11px;padding:3px 9px;border-radius:12px;margin-right:6px;margin-bottom:8px;
+      font-size:13px;padding:3px 9px;border-radius:12px;margin-right:6px;margin-bottom:8px;
       font-family:'JetBrains Mono',monospace;cursor:pointer;border:none;
     }
     .var-pill:hover{opacity:0.8;}
     .template-box{
-      border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:13px;
+      border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:15px;
       min-height:54px;background:var(--bg);width:100%;font-family:'Inter',sans-serif;
       resize:vertical;
     }
     .template-box:focus{outline:none;border-color:var(--accent);}
     .template-save-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
-    .saved-tag{font-size:11px;color:var(--booked-t);display:none;}
+    .saved-tag{font-size:13px;color:var(--booked-t);display:none;}
 
     /* ── EMAIL SEQUENCE BUILDER (collapsed-list, expand to edit) ── */
     .seq-wrap{padding:16px 20px;max-width:640px;}
@@ -308,14 +308,14 @@
     .seq-row.expanded{border-color:var(--accent);background:var(--card);cursor:default;}
     .seq-num{
       width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-text);
-      font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:600;
+      font-size:13px;display:flex;align-items:center;justify-content:center;font-weight:600;
       margin-right:10px;flex-shrink:0;
     }
-    .seq-row-title{font-size:12px;font-weight:600;}
-    .seq-row-delay{font-size:11px;color:var(--muted);margin-left:10px;}
-    .seq-expand-hint{font-size:11px;color:var(--muted);}
+    .seq-row-title{font-size:14px;font-weight:600;}
+    .seq-row-delay{font-size:13px;color:var(--muted);margin-left:10px;}
+    .seq-expand-hint{font-size:13px;color:var(--muted);}
     .seq-edit-body{padding-top:12px;}
-    .seq-delete{color:var(--dead-t);font-size:11px;cursor:pointer;margin-left:auto;}
+    .seq-delete{color:var(--dead-t);font-size:13px;cursor:pointer;margin-left:auto;}
     .seq-delete:hover{text-decoration:underline;}
 
     /* ── RESPONSIVE ── */
@@ -324,7 +324,7 @@
       .sidebar{position:fixed;top:54px;left:0;bottom:0;z-index:60;transform:translateX(-100%);transition:transform 0.25s;width:200px;}
       .sidebar.open{transform:translateX(0);}
       .switcher .sw-name{max-width:100px;}
-      .stat-val{font-size:15px;}
+      .stat-val{font-size:17px;}
       .stat{padding:10px 12px;min-width:68px;}
       .page-head{padding:12px 14px;}
       .leads-wrap{padding:6px 8px;}
@@ -458,7 +458,7 @@
     <div class="panel-head">
       <div>
         <h2 id="pName">Lead</h2>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px;" id="pId"></div>
+        <div style="font-size:13px;color:var(--muted);margin-top:2px;" id="pId"></div>
       </div>
       <button class="panel-close" onclick="closePanel()">×</button>
     </div>
@@ -486,7 +486,7 @@
 
       <div class="activity-log">
         <h3>Call History</h3>
-        <div id="pCalls"><div style="color:var(--muted);font-size:12px;">Loading...</div></div>
+        <div id="pCalls"><div style="color:var(--muted);font-size:14px;">Loading...</div></div>
       </div>
 
       <div class="internal-toggle" onclick="toggleInternal()">
@@ -497,10 +497,10 @@
       <div id="internalPanel" class="internal-panel">
         <div class="activity-log">
           <h3>Activity Log</h3>
-          <div id="pActivity"><div style="color:var(--muted);font-size:12px;">No activity yet.</div></div>
+          <div id="pActivity"><div style="color:var(--muted);font-size:14px;">No activity yet.</div></div>
         </div>
         <div class="activity-log">
-          <h3>Simulate Outcome <span style="color:var(--muted);font-weight:400;font-size:11px;">(testing only)</span></h3>
+          <h3>Simulate Outcome <span style="color:var(--muted);font-weight:400;font-size:13px;">(testing only)</span></h3>
           <div class="sim-btn-row">
             <button class="btn sm" onclick="simulateOutcome('no-answer')">No Answer</button>
             <button class="btn sm" onclick="simulateOutcome('voicemail')">Voicemail</button>
@@ -511,7 +511,7 @@
         </div>
         <div class="activity-log danger-zone">
           <h3>Delete Lead</h3>
-          <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">This removes the lead and everything tied to it, calls, texts, emails. This can't be undone.</p>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">This removes the lead and everything tied to it, calls, texts, emails. This can't be undone.</p>
           <button class="btn sm danger" onclick="deleteLeadConfirm()">Delete this lead</button>
         </div>
       </div>
@@ -551,7 +551,7 @@
       <div class="fg"><label>Offer Seen</label><input id="iOffer" placeholder="Free roofing inspection"/></div>
       <div class="fg" style="display:flex;align-items:center;gap:8px;flex-direction:row;">
         <input type="checkbox" id="iDemo" style="width:auto;" checked/>
-        <label for="iDemo" style="margin:0;font-size:12px;color:var(--muted);">Demo Lead (rings the phone simulator, never dials a real number)</label>
+        <label for="iDemo" style="margin:0;font-size:14px;color:var(--muted);">Demo Lead (rings the phone simulator, never dials a real number)</label>
       </div>
     </div>
     <div class="modal-foot">
@@ -604,7 +604,7 @@
       const list = document.getElementById('dropdownList');
       list.innerHTML='';
       if(!clients||clients.length===0){
-        list.innerHTML='<div style="padding:14px;font-size:12px;color:var(--muted)">No clients yet.</div>';
+        list.innerHTML='<div style="padding:14px;font-size:14px;color:var(--muted)">No clients yet.</div>';
         return;
       }
       clients.forEach(c=>{
@@ -1116,7 +1116,7 @@
         </div>
 
         <button class="btn primary" onclick="saveSettings()">Save Settings</button>
-        <span id="settingsSavedMsg" style="margin-left:10px;font-size:12px;color:#1a7a1a;display:none;">Saved</span>
+        <span id="settingsSavedMsg" style="margin-left:10px;font-size:14px;color:#1a7a1a;display:none;">Saved</span>
       `;
     }catch(e){
       wrap.innerHTML='<div class="empty"><h3>Could not load settings</h3></div>';
@@ -1164,8 +1164,8 @@
     document.getElementById('pAdded').textContent=formatDate(lead.created_at);
     document.getElementById('pStatus').value=lead.status;
     document.getElementById('pNextStep').textContent=nextStepFor(lead);
-    document.getElementById('pActivity').innerHTML='<div style="color:var(--muted);font-size:12px;">Loading...</div>';
-    document.getElementById('pCalls').innerHTML='<div style="color:var(--muted);font-size:12px;">Loading...</div>';
+    document.getElementById('pActivity').innerHTML='<div style="color:var(--muted);font-size:14px;">Loading...</div>';
+    document.getElementById('pCalls').innerHTML='<div style="color:var(--muted);font-size:14px;">Loading...</div>';
     document.getElementById('internalPanel').classList.remove('open');
     document.getElementById('internalToggleLabel').textContent='Show internal details';
     document.getElementById('internalToggleArrow').textContent='▾';
@@ -1174,7 +1174,7 @@
       const acts=await api(`/leads/${leadId}/activity`);
       const el=document.getElementById('pActivity');
       if(!acts||acts.length===0){
-        el.innerHTML='<div style="color:var(--muted);font-size:12px;">No activity yet.</div>';
+        el.innerHTML='<div style="color:var(--muted);font-size:14px;">No activity yet.</div>';
       }else{
         el.innerHTML=acts.map((a,i)=>{
           // call_summary/sentiment/transcript only exist on rows that
@@ -1204,6 +1204,10 @@
           </div>`;
         }).join('');
       }
+
+      // Now that real activity data has loaded, refresh the Next Step
+      // text using the most recent call's actual summary if one exists,
+      // instead of the generic status-based guess shown while loading.
     }catch(e){console.error(e);}
 
     // Call History — separate fetch from /activity above. Reads the
@@ -1217,7 +1221,7 @@
       const calls = await api(`/leads/${leadId}/calls`);
       const callsEl = document.getElementById('pCalls');
       if(!calls || calls.length===0){
-        callsEl.innerHTML = '<div style="color:var(--muted);font-size:12px;">No calls yet.</div>';
+        callsEl.innerHTML = '<div style="color:var(--muted);font-size:14px;">No calls yet.</div>';
       } else {
         callsEl.innerHTML = calls.map((c,i)=>{
           const outcomeLabel = c.outcome
@@ -1238,7 +1242,7 @@
             ? `<div class="act-transcript-toggle" onclick="toggleCallTranscript(${i})">▾ View transcript</div>
                <div class="act-transcript" id="call_transcript_${i}" style="display:none;">${escapeHtml(c.transcript)}</div>` : '';
           const recordingLink = c.recording_url
-            ? `<div style="margin-top:4px;"><a href="${c.recording_url}" target="_blank" rel="noopener" style="font-size:11px;">▶ Listen to recording</a></div>` : '';
+            ? `<div style="margin-top:4px;"><a href="${c.recording_url}" target="_blank" rel="noopener" style="font-size:13px;">▶ Listen to recording</a></div>` : '';
 
           return `
           <div class="act-item" style="flex-direction:column;align-items:flex-start;">
@@ -1255,21 +1259,17 @@
         }).join('');
       }
 
-      // Refresh Next Step using the most recent call's REAL summary,
-      // now that it's loaded. FIX: this previously searched the
-      // /activity rows for a.call_summary — a field that only ever
-      // existed on the old logActivity()-based call records. Since
-      // call details moved to the dedicated ldm_calls table, that
-      // field no longer exists on activity rows at all, so Next Step
-      // was permanently stuck on the generic "waiting on the call
-      // summary" text even when a real summary was sitting right there
-      // in Call History. calls[] is already ordered most-recent-first
-      // by getCallsByLead, so the first one with a summary is correct.
+      // Refresh Next Step using the most recent call's REAL summary.
+      // FIX: this previously searched /activity rows for a.call_summary
+      // — a field that only ever existed on the old logActivity()-based
+      // call records. Call details now live in the dedicated ldm_calls
+      // table, so the field is `summary`, and calls[] is already
+      // ordered most-recent-first by getCallsByLead.
       const mostRecentCallWithSummary = (calls||[]).find(c => c.summary);
       document.getElementById('pNextStep').textContent = nextStepFor(lead, mostRecentCallWithSummary);
     }catch(e){
       console.error(e);
-      document.getElementById('pCalls').innerHTML = '<div style="color:var(--muted);font-size:12px;">Could not load calls.</div>';
+      document.getElementById('pCalls').innerHTML = '<div style="color:var(--muted);font-size:14px;">Could not load calls.</div>';
     }
   }
 
@@ -1301,7 +1301,7 @@
         // summary has arrived, instead of guessing. Falls back to the
         // generic line only while that data is still loading or hasn't
         // come through yet (e.g. before the Retell webhook URL is set).
-        // recentCallActivity is now a row from ldm_calls (via
+        // recentCallActivity is a row from ldm_calls (via
         // getCallsByLead), so the field is `summary`, not the old
         // `call_summary` name from the previous ldm_contact_activity
         // shape.
