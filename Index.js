@@ -26,6 +26,7 @@ const {
   getUpcomingSmsForClient,
   getUpcomingEmailsForClient,
   deleteLead,
+  getCallsByLead,
 } = require('./services/leads');
 const { sendSMS } = require('./services/twilio');
 
@@ -133,6 +134,23 @@ app.get('/leads/:id/activity', async (req, res) => {
       .order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================================================
+// CALL HISTORY — distinct from /activity above. This reads the
+// dedicated ldm_calls table (transcript, summary, sentiment, outcome,
+// duration, recording_url), not the generic activity log. Powers the
+// "Call History" section on the lead detail panel, so a lead's actual
+// call transcripts/outcomes are visible directly under their status,
+// not buried generically inside the activity feed.
+// ================================================
+app.get('/leads/:id/calls', async (req, res) => {
+  try {
+    const calls = await getCallsByLead(req.params.id);
+    res.json(calls);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
