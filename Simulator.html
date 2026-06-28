@@ -245,6 +245,12 @@
 
   let retellClient = null;
   let retellConnected = false;
+  // Guards endCall() against running twice — it can now be triggered
+  // either by the human clicking the hang-up button OR by Retell's
+  // own call_ended event firing (the agent/caller ending the call
+  // first). Without this, both could fire in quick succession and
+  // double-POST /simulator/end.
+  let callEndedHandled = false;
 
   // --------------------------------------------------------
   // STANDBY CLOCK
@@ -433,6 +439,20 @@
       });
       retellClient.on('call_ended', () => {
         retellConnected = false;
+        // THE FIX: previously this only flipped retellConnected to
+        // false and did nothing else. If Retell (the agent/caller)
+        // ended the call before the human clicked the hang-up button,
+        // the on-screen timer kept running and the backend was never
+        // told the call ended — the lead never got logged as
+        // completed and the follow-up SMS never got scheduled. Now it
+        // calls the exact same endCall() the hang-up button uses, so
+        // both paths behave identically. Only fires if we're actually
+        // mid-call (callTimer running) and haven't already handled
+        // the end via the other path.
+        if(!callEndedHandled && callTimer){
+          callEndedHandled = true;
+          endCall();
+        }
       });
       retellClient.on('error', (err) => {
         console.error('Retell call error', err);
@@ -506,6 +526,7 @@
     }
 
     callSeconds = 0;
+    callEndedHandled = false;
     clearInterval(callTimer);
     callTimer = setInterval(() => {
       callSeconds++;
@@ -550,7 +571,16 @@
   // END CALL
   // --------------------------------------------------------
   async function endCall(){
+    // Idempotency guard: this can now be entered from the hang-up
+    // button OR from the call_ended SDK event firing first. Whichever
+    // gets here first wins; the other call (if it still happens) is a
+    // no-op so we never double-POST /simulator/end or double-log.
+    if(callEndedHandled && callTimer === null){
+      return;
+    }
+    callEndedHandled = true;
     clearInterval(callTimer);
+    callTimer = null;
     closeAudioGate();
     if(retellClient){
       try{ retellClient.stopCall(); }catch(e){}
@@ -580,6 +610,7 @@
       currentLead = null;
       retellClient = null;
       retellConnected = false;
+      callEndedHandled = false;
       muted = false; speakerOn = true;
       startPolling();
     }, delay);
