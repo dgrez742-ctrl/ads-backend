@@ -1,1565 +1,174 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>BotCipher — Lead Management</title>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+<meta charset="UTF-8">
+<title>BotCipher — Dispatch Board, simplified</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
 
-    :root {
-      --bg:       #ffffff;
-      --surface:  #fafafa;
-      --card:     #f7f7f7;
-      --border:   #e5e5e5;
-      --text:     #111111;
-      --muted:    #595959;
-      --accent:   #111111;
-      --accent-text: #ffffff;
+  :root{
+    --ink:        #0a0a0a;
+    --paper:      #f6f4ee;
+    --muted:      #6b6356;
+    --line:       #e3ddcd;
+    --green:      #2c6b3f;
+    --amber:      #6e5320;
+    --red:        #a1322a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:'Inter',sans-serif;
+  }
+  .frame{display:flex;min-height:100vh;}
 
-      --new:           #eeeeee;  --new-t:      #777777;
-      --attempted:     #fff3cd;  --attempted-t:#7a5c00;
-      --contacted:     #e0e8f5;  --contacted-t:#3355aa;
-      --booked:        #d8f0d8;  --booked-t:   #1a7a1a;
-      --dead:          #fbdede;  --dead-t:     #b33333;
-      --nurture:       #e7e0f5;  --nurture-t:  #5c3da6;
-    }
+  /* ---------- SIDEBAR ---------- */
+  .side{
+    width:210px;flex-shrink:0;padding:32px 0;
+  }
+  .brand{
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:19px;
+    letter-spacing:-0.01em;padding:0 28px;margin-bottom:2px;color:var(--ink);
+  }
+  .client-tag{
+    padding:0 28px;margin-bottom:40px;font-size:13px;color:var(--muted);
+  }
+  .nav{display:flex;flex-direction:column;}
+  .nav a{
+    padding:9px 28px;color:var(--muted);text-decoration:none;
+    font-size:15px;font-weight:500;
+  }
+  .nav a.active{color:var(--ink);font-weight:600;}
 
-    *{box-sizing:border-box;margin:0;padding:0;}
-    html,body{height:100%;overflow:hidden;}
+  /* ---------- MAIN ---------- */
+  .main{flex:1;padding:44px 56px;max-width:1080px;}
+  .top-row{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px;}
+  h1{
+    font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;
+    margin:0;letter-spacing:-0.01em;
+  }
+  .new-lead-btn{
+    background:none;color:var(--ink);border:none;
+    font-size:14px;font-weight:600;cursor:pointer;padding:0;
+  }
+  .new-lead-btn::before{content:'+ ';font-weight:700;}
 
-    body{
-      background:var(--bg);
-      color:var(--text);
-      font-family:'Inter',sans-serif;
-      font-size:14px;
-      line-height:1.5;
-      display:flex;
-      flex-direction:column;
-    }
+  /* ---------- STAT ROW — quiet, no boxes ---------- */
+  .stat-row{
+    display:flex;gap:48px;padding:24px 0 28px;margin-bottom:8px;border-bottom:1px solid var(--line);
+  }
+  .stat{display:flex;flex-direction:column;gap:4px;}
+  .stat .num{font-family:'Space Grotesk',sans-serif;font-size:26px;font-weight:700;line-height:1;}
+  .stat .lbl{font-size:13px;color:var(--muted);}
+  .stat.flag .num{color:var(--ink);}
 
-    /* ── TOP BAR — client switcher lives here, always visible ── */
-    .topbar{
-      display:flex;align-items:center;justify-content:space-between;
-      padding:0 16px;height:54px;background:var(--bg);
-      border-bottom:1px solid var(--border);flex-shrink:0;gap:12px;position:relative;
-    }
-    .topbar-left{display:flex;align-items:center;gap:10px;min-width:0;}
-    .menu-btn{display:none;background:none;border:none;color:var(--text);cursor:pointer;padding:4px;font-size:20px;}
+  /* ---------- FILTER TABS — underline only ---------- */
+  .tabs{display:flex;gap:24px;padding:18px 0;}
+  .tab{
+    font-size:14.5px;font-weight:500;color:var(--muted);cursor:pointer;
+    padding-bottom:4px;border-bottom:2px solid transparent;
+  }
+  .tab.active{color:var(--ink);font-weight:600;border-bottom-color:var(--ink);}
 
-    .logo{
-      font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;
-      color:var(--text);letter-spacing:0.06em;white-space:nowrap;flex-shrink:0;
-    }
-
-    .switcher{
-      display:flex;align-items:center;gap:8px;cursor:pointer;
-      padding:7px 12px;border-radius:6px;border:1px solid var(--border);
-      transition:background 0.15s;min-width:0;
-    }
-    .switcher:hover{background:var(--card);}
-    .switcher .sw-name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
-    .switcher .sw-niche{font-size:11px;color:var(--muted);white-space:nowrap;}
-    .switcher .sw-arrow{font-size:10px;color:var(--muted);margin-left:2px;}
-
-    .dropdown{
-      display:none;position:absolute;top:50px;left:16px;
-      background:var(--bg);border:1px solid var(--border);border-radius:8px;
-      box-shadow:0 4px 16px rgba(0,0,0,0.10);width:240px;z-index:60;overflow:hidden;
-      max-height:60vh;overflow-y:auto;
-    }
-    .dropdown.open{display:block;}
-    .dropdown-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--card);}
-    .dropdown-item:last-child{border-bottom:none;}
-    .dropdown-item:hover{background:var(--card);}
-    .dropdown-item.active{background:var(--card);}
-    .dropdown-item .dname{font-weight:500;font-size:12px;}
-    .dropdown-item .dniche{font-size:10px;color:var(--muted);margin-top:1px;}
-    .dropdown-add{padding:10px 14px;cursor:pointer;font-size:12px;color:var(--muted);border-top:1px solid var(--border);}
-    .dropdown-add:hover{background:var(--card);color:var(--text);}
-
-    .nav-right{display:flex;gap:8px;align-items:center;flex-shrink:0;}
-
-    /* ── BUTTONS ── */
-    .btn{
-      padding:7px 14px;border-radius:5px;font-size:12px;font-weight:500;
-      cursor:pointer;border:1px solid var(--border);background:var(--bg);
-      color:var(--text);transition:all 0.15s;font-family:'Inter',sans-serif;white-space:nowrap;
-    }
-    .btn:hover{background:var(--card);}
-    .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text);font-weight:600;}
-    .btn.primary:hover{opacity:0.85;}
-    .btn.sm{padding:5px 10px;font-size:11px;}
-    .btn.call{background:#e8f5e8;border-color:#bfe3bf;color:#1a7a1a;}
-    .btn.call:hover{background:#dcefdc;}
-
-    /* ── CALLING BAR ── */
-    .calling-bar{
-      display:none;background:#e8f5e8;border-bottom:1px solid #bfe3bf;
-      padding:8px 16px;font-size:12px;color:#1a7a1a;align-items:center;gap:8px;flex-shrink:0;
-    }
-    .calling-bar.show{display:flex;}
-    .calling-dot{width:8px;height:8px;border-radius:50%;background:#1a7a1a;animation:pulse 1s infinite;}
-    @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
-
-    /* ── BODY SHELL ── */
-    .shell{display:flex;flex:1;overflow:hidden;}
-
-    /* ── SIDEBAR — pure page nav now, not the client list ── */
-    .sidebar{
-      width:160px;background:var(--surface);border-right:1px solid var(--border);
-      padding:10px 0;flex-shrink:0;overflow-y:auto;
-    }
-    .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:59;}
-    .sidebar-backdrop.show{display:block;}
-
-    .navitem{
-      padding:9px 16px;font-size:12px;display:flex;align-items:center;gap:9px;
-      cursor:pointer;color:var(--muted);transition:all 0.15s;
-    }
-    .navitem:hover{color:var(--text);background:var(--card);}
-    .navitem.active{background:var(--accent);color:var(--accent-text);font-weight:600;}
-    .navitem .nicon{width:14px;display:inline-flex;justify-content:center;flex-shrink:0;}
-
-    /* ── MAIN ── */
-    .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
-
-    .page-head{
-      padding:14px 20px;border-bottom:1px solid var(--border);
-      display:flex;align-items:center;justify-content:space-between;
-      flex-shrink:0;gap:12px;flex-wrap:wrap;
-    }
-    .page-head h1{font-size:15px;font-weight:600;}
-    .page-head .sub{font-size:11px;color:var(--muted);margin-top:2px;}
-
-    /* ── STATS ── */
-    .stats{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;}
-    .stat{padding:12px 16px;flex:1;min-width:78px;white-space:nowrap;border-right:1px solid var(--border);}
-    .stat:last-child{border-right:none;}
-    .stat-val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;}
-    .stat-lbl{font-size:9px;color:var(--muted);margin-top:2px;letter-spacing:0.04em;text-transform:uppercase;}
-
-    /* ── FILTERS ── */
-    .filters{padding:10px 20px;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-shrink:0;overflow-x:auto;}
-    .fbtn{
-      padding:4px 12px;border-radius:20px;font-size:12px;cursor:pointer;
-      border:1px solid var(--border);background:var(--bg);color:var(--muted);
-      transition:all 0.15s;white-space:nowrap;flex-shrink:0;font-family:'Inter',sans-serif;
-    }
-    .fbtn:hover{color:var(--text);}
-    .fbtn.active{border-color:var(--accent);color:var(--accent-text);background:var(--accent);}
-
-    /* ── SUB TABS (Templates/Sequence vs History, inside SMS & Email pages) ── */
-    .subtabs{display:flex;gap:4px;padding:10px 20px 0;border-bottom:1px solid var(--border);flex-shrink:0;}
-    .stbtn{
-      padding:8px 4px;margin-right:14px;font-size:12px;font-weight:500;color:var(--muted);
-      background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;
-      transition:all 0.15s;font-family:'Inter',sans-serif;
-    }
-    .stbtn:hover{color:var(--text);}
-    .stbtn.active{color:var(--text);border-bottom-color:var(--accent);}
-
-    .section-label{
-      font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;
-      letter-spacing:0.06em;padding:14px 0 6px;
-    }
-    .leads-wrap .section-label:first-child{padding-top:4px;}
-
-    /* ── LEADS LIST ── */
-    .leads-wrap{flex:1;overflow-y:auto;padding:10px 14px;}
-    .lead-card{
-      background:var(--card);border:1px solid var(--border);border-radius:6px;
-      padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:background 0.15s;
-    }
-    .lead-card:hover{background:#eeeeee;}
-
-    .lead-row1{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;}
-    .lead-name-wrap{display:flex;align-items:center;gap:8px;min-width:0;}
-    .lead-name{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .lead-phone{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap;}
-    .lead-row2{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
-    .lead-last{font-size:11px;color:var(--muted);}
-    .lead-last strong{color:var(--text);}
-    .lead-meta{display:flex;gap:12px;align-items:center;}
-    .lead-attempts,.lead-time{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);}
-
-    .badge{
-      display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;
-      font-size:10px;font-weight:600;white-space:nowrap;flex-shrink:0;
-    }
-    .badge.new{background:var(--new);color:var(--new-t);}
-    .badge.attempted{background:var(--attempted);color:var(--attempted-t);}
-    .badge.contacted{background:var(--contacted);color:var(--contacted-t);}
-    .badge.booked{background:var(--booked);color:var(--booked-t);}
-    .badge.dead{background:var(--dead);color:var(--dead-t);}
-    .badge.nurture{background:var(--nurture);color:var(--nurture-t);}
-
-    .empty{padding:60px 20px;text-align:center;color:var(--muted);}
-    .empty h3{font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px;}
-
-    /* ── PAGE CONTAINERS ── */
-    #pageLeads,#pageSms,#pageEmail,#pageBookings,#pageSettings{
-      flex:1;flex-direction:column;overflow:hidden;min-height:0;
-    }
-
-    /* ── SLIDE PANEL ── */
-    .panel-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:50;}
-    .panel-overlay.open{display:block;}
-    .panel{
-      position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);
-      background:var(--bg);border-left:1px solid var(--border);
-      display:flex;flex-direction:column;transform:translateX(100%);
-      transition:transform 0.25s ease;z-index:51;
-    }
-    .panel-overlay.open .panel{transform:translateX(0);}
-    .panel-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0;}
-    .panel-head h2{font-size:15px;font-weight:600;}
-    .panel-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;padding:0;}
-    .panel-close:hover{color:var(--text);}
-    .panel-body{flex:1;overflow-y:auto;padding:16px 20px;}
-    .panel-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0;}
-
-    .field{padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:13px;gap:12px;}
-    .field:last-child{border-bottom:none;}
-    .field-lbl{color:var(--muted);flex-shrink:0;}
-    .field-val{font-weight:700;text-align:right;word-break:break-all;}
-
-    .status-sel{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:4px;font-size:12px;font-family:'Inter',sans-serif;cursor:pointer;}
-
-    .next-step-box{margin-top:16px;padding:12px 14px;border-radius:6px;background:#e8f5e8;border:1px solid #bfe3bf;}
-    .next-step-lbl{font-size:10px;color:#1a7a1a;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px;font-weight:600;}
-    .next-step-val{font-size:13px;color:var(--text);}
-
-    .internal-toggle{margin-top:16px;padding:10px 0;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);cursor:pointer;user-select:none;}
-    .internal-toggle:hover{color:var(--text);}
-    .internal-panel{display:none;}
-    .internal-panel.open{display:block;}
-
-    .activity-log{margin-top:16px;}
-    .activity-log h3{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;}
-    .act-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;}
-    .act-item:last-child{border-bottom:none;}
-    .act-type{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text);min-width:44px;text-transform:uppercase;padding-top:1px;font-weight:600;}
-    .act-out{color:var(--muted);flex:1;}
-    .act-out strong{color:var(--text);}
-    .act-duration{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap;}
-    .act-summary{font-size:11px;color:var(--text);margin-top:6px;padding:8px 10px;background:var(--card);border-radius:5px;width:100%;line-height:1.6;}
-    .act-transcript-toggle{font-size:11px;color:var(--muted);cursor:pointer;margin-top:6px;}
-    .act-transcript-toggle:hover{color:var(--text);}
-    .act-transcript{font-size:11px;color:var(--text);margin-top:6px;padding:10px;background:var(--card);border-radius:5px;width:100%;line-height:1.5;white-space:pre-wrap;max-height:200px;overflow-y:auto;}
-    .act-time{color:var(--muted);white-space:nowrap;font-size:11px;}
-
-    .sim-btn-row{display:flex;flex-wrap:wrap;gap:6px;}
-
-    .danger-zone{border-top:1px solid var(--border);margin-top:16px;padding-top:16px;}
-    .btn.danger{background:var(--dead);border-color:var(--dead-t);color:var(--dead-t);}
-    .btn.danger:hover{background:#f5c6c6;}
-
-    /* ── MODAL ── */
-    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center;padding:16px;}
-    .modal-overlay.open{display:flex;}
-    .modal{background:var(--bg);border:1px solid var(--border);border-radius:8px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;}
-    .modal-head{padding:18px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
-    .modal-head h2{font-size:15px;font-weight:600;}
-    .modal-body{padding:16px 20px;}
-    .modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
-    .fg{margin-bottom:14px;}
-    .fg label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;}
-    .fg input,.fg select{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:5px;font-size:13px;font-family:'Inter',sans-serif;}
-    .fg input:focus,.fg select:focus{outline:none;border-color:var(--accent);}
-
-    /* ── SETTINGS PAGE ── */
-    .settings-form{padding:20px;max-width:480px;height:100%;overflow-y:auto;}
-    .settings-section{margin-bottom:24px;}
-    .settings-section h3{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;}
-    .settings-row{display:flex;gap:12px;margin-bottom:12px;align-items:flex-end;}
-    .settings-row .fg{flex:1;margin-bottom:0;}
-    .settings-hint{font-size:11px;color:var(--muted);margin-top:-6px;margin-bottom:12px;}
-
-    /* ── SMS TEMPLATE COMPOSER ── */
-    .composer-wrap{padding:16px 20px;max-width:640px;}
-    .template-card{border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:14px;}
-    .template-card.timing{border-color:#bfe3bf;background:#f7fcf7;}
-    .template-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:10px;}
-    .template-title{font-size:13px;font-weight:600;}
-    .template-sub{font-size:11px;color:var(--muted);margin-top:2px;}
-    .var-pill{
-      display:inline-block;background:var(--contacted);color:var(--contacted-t);
-      font-size:11px;padding:3px 9px;border-radius:12px;margin-right:6px;margin-bottom:8px;
-      font-family:'JetBrains Mono',monospace;cursor:pointer;border:none;
-    }
-    .var-pill:hover{opacity:0.8;}
-    .template-box{
-      border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:13px;
-      min-height:54px;background:var(--bg);width:100%;font-family:'Inter',sans-serif;
-      resize:vertical;
-    }
-    .template-box:focus{outline:none;border-color:var(--accent);}
-    .template-save-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
-    .saved-tag{font-size:11px;color:var(--booked-t);display:none;}
-
-    /* ── EMAIL SEQUENCE BUILDER (collapsed-list, expand to edit) ── */
-    .seq-wrap{padding:16px 20px;max-width:640px;}
-    .seq-row{
-      border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:8px;
-      cursor:pointer;display:flex;justify-content:space-between;align-items:center;
-    }
-    .seq-row:hover{background:var(--card);}
-    .seq-row.expanded{border-color:var(--accent);background:var(--card);cursor:default;}
-    .seq-num{
-      width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-text);
-      font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:600;
-      margin-right:10px;flex-shrink:0;
-    }
-    .seq-row-title{font-size:12px;font-weight:600;}
-    .seq-row-delay{font-size:11px;color:var(--muted);margin-left:10px;}
-    .seq-expand-hint{font-size:11px;color:var(--muted);}
-    .seq-edit-body{padding-top:12px;}
-    .seq-delete{color:var(--dead-t);font-size:11px;cursor:pointer;margin-left:auto;}
-    .seq-delete:hover{text-decoration:underline;}
-
-    /* ── RESPONSIVE ── */
-    @media(max-width:700px){
-      .menu-btn{display:block;}
-      .sidebar{position:fixed;top:54px;left:0;bottom:0;z-index:60;transform:translateX(-100%);transition:transform 0.25s;width:200px;}
-      .sidebar.open{transform:translateX(0);}
-      .switcher .sw-name{max-width:100px;}
-      .stat-val{font-size:15px;}
-      .stat{padding:10px 12px;min-width:68px;}
-      .page-head{padding:12px 14px;}
-      .leads-wrap{padding:6px 8px;}
-      .lead-phone{display:none;}
-    }
-  </style>
+  /* ---------- LEAD ROWS — hairline list, no card borders ---------- */
+  .rows{}
+  .row{
+    display:flex;align-items:center;gap:20px;padding:18px 4px;
+    border-bottom:1px solid var(--line);
+  }
+  .row-name{font-size:16px;font-weight:700;width:110px;flex-shrink:0;font-family:'Space Grotesk',sans-serif;}
+  .row-detail{flex:1;font-size:14.5px;color:#46423a;min-width:0;}
+  .row-detail strong{color:var(--ink);font-weight:600;}
+  .row-right{display:flex;align-items:center;gap:18px;flex-shrink:0;}
+  .row-phone{font-size:13.5px;color:var(--muted);}
+  .row-status{font-size:13.5px;font-weight:600;width:80px;text-align:right;}
+  .row-status.booked{color:var(--green);}
+  .row-status.contacted{color:var(--amber);}
+  .row-status.nurture{color:#43300f;}
+  .row-status.dead{color:var(--red);}
+  .row-time{font-size:13px;color:var(--muted);width:56px;text-align:right;}
+</style>
 </head>
 <body>
-
-<!-- TOP BAR -->
-<div class="topbar">
-  <div class="topbar-left">
-    <button class="menu-btn" onclick="toggleSidebar()">☰</button>
-    <div class="logo">BOTCIPHER</div>
-    <div class="switcher" onclick="toggleDropdown()">
-      <div>
-        <div class="sw-name" id="currentClientName">Select a client</div>
-      </div>
-      <div class="sw-niche" id="currentClientNiche"></div>
-      <div class="sw-arrow">▾</div>
-    </div>
-    <div class="dropdown" id="clientDropdown">
-      <div id="dropdownList"></div>
-      <div class="dropdown-add" onclick="openAddClient()">+ Add Client</div>
+<div class="frame">
+  <div class="side">
+    <div class="brand">BOTCIPHER</div>
+    <div class="client-tag">BGS · Roofing</div>
+    <div class="nav">
+      <a href="#" class="active">Leads</a>
+      <a href="#">Text messages</a>
+      <a href="#">Email</a>
+      <a href="#">Bookings</a>
+      <a href="#">Settings</a>
     </div>
   </div>
-  <div class="nav-right">
-    <button class="btn sm primary" onclick="openInjectLead()">Inject Lead</button>
-  </div>
-</div>
 
-<!-- CALLING BAR -->
-<div class="calling-bar" id="callingBar">
-  <div class="calling-dot"></div>
-  <span id="callingText">Calling lead...</span>
-  <button class="btn sm" style="margin-left:auto;" onclick="dismissCalling()">Dismiss</button>
-</div>
-
-<!-- SHELL -->
-<div class="shell">
-
-  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
-
-  <!-- SIDEBAR — pure page nav -->
-  <aside class="sidebar" id="sidebar">
-    <div class="navitem active" id="navLeads" onclick="switchPage('leads')"><span class="nicon">☰</span>Leads</div>
-    <div class="navitem" id="navSms" onclick="switchPage('sms')"><span class="nicon">💬</span>SMS</div>
-    <div class="navitem" id="navEmail" onclick="switchPage('email')"><span class="nicon">✉</span>Email</div>
-    <div class="navitem" id="navBookings" onclick="switchPage('bookings')"><span class="nicon">📅</span>Bookings</div>
-    <div class="navitem" id="navSettings" onclick="switchPage('settings')"><span class="nicon">⚙</span>Settings</div>
-  </aside>
-
-  <!-- MAIN -->
-  <main class="main">
-
-    <div class="page-head">
-      <div>
-        <h1 id="pageHeadTitle">Leads</h1>
-        <div class="sub" id="pageHeadSub">Select a client to get started</div>
-      </div>
-      <button class="btn sm" onclick="refreshCurrentPage()">↻ Refresh</button>
+  <div class="main">
+    <div class="top-row">
+      <h1>Leads</h1>
+      <button class="new-lead-btn">New lead</button>
     </div>
 
-    <!-- LEADS PAGE -->
-    <div id="pageLeads">
-      <div class="stats">
-        <div class="stat"><div class="stat-val" id="sTotal">—</div><div class="stat-lbl">Total</div></div>
-        <div class="stat"><div class="stat-val" id="sNew">—</div><div class="stat-lbl">New</div></div>
-        <div class="stat"><div class="stat-val" id="sAttempted">—</div><div class="stat-lbl">Attempted</div></div>
-        <div class="stat"><div class="stat-val" id="sContacted">—</div><div class="stat-lbl">Contacted</div></div>
-        <div class="stat"><div class="stat-val" id="sBooked">—</div><div class="stat-lbl">Booked</div></div>
-        <div class="stat"><div class="stat-val" id="sDead">—</div><div class="stat-lbl">Dead</div></div>
-        <div class="stat"><div class="stat-val" id="sNurture">—</div><div class="stat-lbl">Nurture</div></div>
-      </div>
-      <div class="filters">
-        <button class="fbtn active" onclick="setFilter('all',this)">All</button>
-        <button class="fbtn" onclick="setFilter('new',this)">New</button>
-        <button class="fbtn" onclick="setFilter('attempted',this)">Attempted</button>
-        <button class="fbtn" onclick="setFilter('contacted',this)">Contacted</button>
-        <button class="fbtn" onclick="setFilter('booked',this)">Booked</button>
-        <button class="fbtn" onclick="setFilter('nurture',this)">Nurture</button>
-        <button class="fbtn" onclick="setFilter('dead',this)">Dead</button>
-      </div>
-      <div class="leads-wrap" id="leadsWrap">
-        <div class="empty"><h3>No client selected</h3><p>Choose a client from the top left.</p></div>
-      </div>
+    <div class="stat-row">
+      <div class="stat"><div class="num">4</div><div class="lbl">Total</div></div>
+      <div class="stat flag"><div class="num">0</div><div class="lbl">New</div></div>
+      <div class="stat"><div class="num">0</div><div class="lbl">Attempted</div></div>
+      <div class="stat"><div class="num">2</div><div class="lbl">Contacted</div></div>
+      <div class="stat"><div class="num">1</div><div class="lbl">Booked</div></div>
     </div>
 
-    <!-- SMS PAGE -->
-    <div id="pageSms" style="display:none;">
-      <div class="subtabs">
-        <button class="stbtn active" id="smsSubHistory" onclick="setSmsSubTab('history')">SMS Sent</button>
-        <button class="stbtn" id="smsSubTemplates" onclick="setSmsSubTab('templates')">Templates</button>
-      </div>
-      <div class="leads-wrap" id="smsWrap">
-        <div class="empty"><h3>No client selected</h3><p>Choose a client from the top left.</p></div>
-      </div>
+    <div class="tabs">
+      <div class="tab active">All</div>
+      <div class="tab">New</div>
+      <div class="tab">Attempted</div>
+      <div class="tab">Contacted</div>
+      <div class="tab">Booked</div>
+      <div class="tab">Nurture</div>
+      <div class="tab">Dead</div>
     </div>
 
-    <!-- EMAIL PAGE -->
-    <div id="pageEmail" style="display:none;">
-      <div class="subtabs">
-        <button class="stbtn active" id="emailSubHistory" onclick="setEmailSubTab('history')">Email Sent</button>
-        <button class="stbtn" id="emailSubBuilder" onclick="setEmailSubTab('builder')">Sequence</button>
-      </div>
-      <div class="leads-wrap" id="emailWrap">
-        <div class="empty"><h3>No client selected</h3><p>Choose a client from the top left.</p></div>
-      </div>
-    </div>
-
-    <!-- BOOKINGS PAGE -->
-    <div id="pageBookings" style="display:none;">
-      <div class="leads-wrap" id="bookingsWrap">
-        <div class="empty"><h3>No client selected</h3><p>Choose a client from the top left.</p></div>
-      </div>
-    </div>
-
-    <!-- SETTINGS PAGE -->
-    <div id="pageSettings" style="display:none;">
-      <div class="settings-form" id="settingsWrap">
-        <div class="empty"><h3>No client selected</h3><p>Choose a client from the top left.</p></div>
-      </div>
-    </div>
-
-  </main>
-</div>
-
-<!-- LEAD DETAIL PANEL -->
-<div class="panel-overlay" id="panelOverlay" onclick="closePanelOnBg(event)">
-  <div class="panel" id="leadPanel">
-    <div class="panel-head">
-      <div>
-        <h2 id="pName">Lead</h2>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px;" id="pId"></div>
-      </div>
-      <button class="panel-close" onclick="closePanel()">×</button>
-    </div>
-    <div class="panel-body">
-      <div class="field"><span class="field-lbl">Phone</span><span class="field-val" id="pPhone">—</span></div>
-      <div class="field"><span class="field-lbl">Email</span><span class="field-val" id="pEmail">—</span></div>
-      <div class="field"><span class="field-lbl">Offer Seen</span><span class="field-val" id="pOffer">—</span></div>
-      <div class="field"><span class="field-lbl">Added</span><span class="field-val" id="pAdded">—</span></div>
-      <div class="field">
-        <span class="field-lbl">Status</span>
-        <select class="status-sel" id="pStatus" onchange="updateStatus()">
-          <option value="new">New</option>
-          <option value="attempted">Attempted</option>
-          <option value="contacted">Contacted</option>
-          <option value="booked">Booked</option>
-          <option value="dead">Dead</option>
-          <option value="nurture">Nurture</option>
-        </select>
-      </div>
-
-      <div class="next-step-box">
-        <div class="next-step-lbl">Next step</div>
-        <div class="next-step-val" id="pNextStep">—</div>
-      </div>
-
-      <div class="activity-log">
-        <h3>Call History</h3>
-        <div id="pCalls"><div style="color:var(--muted);font-size:12px;">Loading...</div></div>
-      </div>
-
-      <div class="internal-toggle" onclick="toggleInternal()">
-        <span id="internalToggleLabel">Show internal details</span>
-        <span id="internalToggleArrow">▾</span>
-      </div>
-
-      <div id="internalPanel" class="internal-panel">
-        <div class="activity-log">
-          <h3>Activity Log</h3>
-          <div id="pActivity"><div style="color:var(--muted);font-size:12px;">No activity yet.</div></div>
-        </div>
-        <div class="activity-log">
-          <h3>Simulate Outcome <span style="color:var(--muted);font-weight:400;font-size:11px;">(testing only)</span></h3>
-          <div class="sim-btn-row">
-            <button class="btn sm" onclick="simulateOutcome('no-answer')">No Answer</button>
-            <button class="btn sm" onclick="simulateOutcome('voicemail')">Voicemail</button>
-            <button class="btn sm" onclick="simulateOutcome('interested')">Interested / Booked</button>
-            <button class="btn sm" onclick="simulateOutcome('not-interested')">Not Interested</button>
-            <button class="btn sm" onclick="simulateOutcome('exhaust-sequence')">Exhaust to Nurture</button>
-          </div>
-        </div>
-        <div class="activity-log danger-zone">
-          <h3>Delete Lead</h3>
-          <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">This removes the lead and everything tied to it, calls, texts, emails. This can't be undone.</p>
-          <button class="btn sm danger" onclick="deleteLeadConfirm()">Delete this lead</button>
+    <div class="rows">
+      <div class="row">
+        <div class="row-name">Jake</div>
+        <div class="row-detail">Booked an <strong>inspection</strong> · 29 Jun, 12:00 PM · 18 Boulevard, Denver</div>
+        <div class="row-right">
+          <span class="row-phone">+234 913 913 2841</span>
+          <span class="row-status booked">Booked</span>
+          <span class="row-time">2m ago</span>
         </div>
       </div>
-    </div>
-    <div class="panel-footer">
-      <button class="btn call" onclick="callLead()">📞 Call Lead</button>
-      <button class="btn" onclick="closePanel()">Close</button>
+
+      <div class="row">
+        <div class="row-name">ghxyc</div>
+        <div class="row-detail">Call completed — asked about a <strong>free roofing quote</strong></div>
+        <div class="row-right">
+          <span class="row-phone">+47 779 424 3331</span>
+          <span class="row-status contacted">Contacted</span>
+          <span class="row-time">19m ago</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-name">jaam</div>
+        <div class="row-detail">Not ready yet — moved into the follow-up sequence</div>
+        <div class="row-right">
+          <span class="row-phone">+47 779 424 356</span>
+          <span class="row-status nurture">Nurture</span>
+          <span class="row-time">1h ago</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-name">john</div>
+        <div class="row-detail">Call failed to trigger — free roofing quote</div>
+        <div class="row-right">
+          <span class="row-phone">+47 779 4243</span>
+          <span class="row-status dead">Failed</span>
+          <span class="row-time">3h ago</span>
+        </div>
+      </div>
     </div>
   </div>
 </div>
-
-<!-- ADD CLIENT MODAL -->
-<div class="modal-overlay" id="addClientModal">
-  <div class="modal">
-    <div class="modal-head"><h2>Add Client</h2><button class="panel-close" onclick="closeModal('addClientModal')">×</button></div>
-    <div class="modal-body">
-      <div class="fg"><label>Business Name</label><input id="cName" placeholder="e.g. Smith Roofing"/></div>
-      <div class="fg"><label>Niche</label><input id="cNiche" placeholder="e.g. Roofing"/></div>
-      <div class="fg"><label>Email</label><input id="cEmail" placeholder="client@email.com"/></div>
-      <div class="fg"><label>Phone</label><input id="cPhone" placeholder="+1234567890"/></div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn" onclick="closeModal('addClientModal')">Cancel</button>
-      <button class="btn primary" onclick="saveClient()">Save Client</button>
-    </div>
-  </div>
-</div>
-
-<!-- INJECT LEAD MODAL -->
-<div class="modal-overlay" id="injectModal">
-  <div class="modal">
-    <div class="modal-head"><h2>Inject Test Lead</h2><button class="panel-close" onclick="closeModal('injectModal')">×</button></div>
-    <div class="modal-body">
-      <div class="fg"><label>Name</label><input id="iName" placeholder="John Smith"/></div>
-      <div class="fg"><label>Phone</label><input id="iPhone" placeholder="+1234567890"/></div>
-      <div class="fg"><label>Email</label><input id="iEmail" placeholder="john@example.com"/></div>
-      <div class="fg"><label>Offer Seen</label><input id="iOffer" placeholder="Free roofing inspection"/></div>
-      <div class="fg" style="display:flex;align-items:center;gap:8px;flex-direction:row;">
-        <input type="checkbox" id="iDemo" style="width:auto;" checked/>
-        <label for="iDemo" style="margin:0;font-size:12px;color:var(--muted);">Demo Lead (rings the phone simulator, never dials a real number)</label>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn" onclick="closeModal('injectModal')">Cancel</button>
-      <button class="btn primary" onclick="injectLead()">Inject Lead</button>
-    </div>
-  </div>
-</div>
-
-<script>
-  const API = 'https://ads-backend-production-d450.up.railway.app';
-
-  let currentClientId = null;
-  let currentClientList = [];
-  let currentFilter = 'all';
-  let allLeads = [];
-  let currentLeadId = null;
-  let currentPage = 'leads';
-
-  async function api(path, opts={}) {
-    const res = await fetch(`${API}${path}`, {
-      headers:{'Content-Type':'application/json'},
-      ...opts
-    });
-    if(!res.ok) throw new Error(await res.text());
-    return res.json();
-  }
-
-  /* ── SIDEBAR TOGGLE (mobile) ── */
-  function toggleSidebar(){
-    document.getElementById('sidebar').classList.toggle('open');
-    document.getElementById('sidebarBackdrop').classList.toggle('show');
-  }
-
-  /* ── CLIENT DROPDOWN ── */
-  function toggleDropdown(){
-    document.getElementById('clientDropdown').classList.toggle('open');
-  }
-
-  document.addEventListener('click', (e)=>{
-    if(!e.target.closest('.switcher') && !e.target.closest('.dropdown')){
-      document.getElementById('clientDropdown').classList.remove('open');
-    }
-  });
-
-  async function loadClients(){
-    try{
-      const clients = await api('/clients');
-      currentClientList = clients || [];
-      const list = document.getElementById('dropdownList');
-      list.innerHTML='';
-      if(!clients||clients.length===0){
-        list.innerHTML='<div style="padding:14px;font-size:12px;color:var(--muted)">No clients yet.</div>';
-        return;
-      }
-      clients.forEach(c=>{
-        const el=document.createElement('div');
-        el.className='dropdown-item'+(c.id===currentClientId?' active':'');
-        el.dataset.id=c.id;
-        el.innerHTML=`<div class="dname">${c.business_name||c.name}</div><div class="dniche">${c.niche||'No niche set'}</div>`;
-        el.onclick=()=>selectClient(c);
-        list.appendChild(el);
-      });
-      // auto-select the first client if none chosen yet
-      if(!currentClientId && clients.length>0){
-        selectClient(clients[0]);
-      }
-    }catch(e){console.error(e);}
-  }
-
-  async function selectClient(c){
-    currentClientId=c.id;
-    document.getElementById('currentClientName').textContent=c.business_name||c.name;
-    document.getElementById('currentClientNiche').textContent=c.niche||'No niche set';
-    document.querySelectorAll('.dropdown-item').forEach(el=>el.classList.toggle('active',el.dataset.id===c.id));
-    document.getElementById('clientDropdown').classList.remove('open');
-    if(window.innerWidth<=700) document.getElementById('sidebar').classList.remove('open');
-    await refreshCurrentPage();
-  }
-
-  /* ── PAGE NAV ── */
-  const PAGE_META = {
-    leads:    { title:'Leads',    sub:c=>`${c.business_name||c.name}, ${c.niche||''}` },
-    sms:      { title:'SMS',      sub:c=>`${c.business_name||c.name}` },
-    email:    { title:'Email',    sub:c=>`${c.business_name||c.name}` },
-    bookings: { title:'Bookings', sub:c=>`${c.business_name||c.name}` },
-    settings: { title:'Settings', sub:c=>`${c.business_name||c.name}` },
-  };
-
-  function switchPage(page){
-    currentPage=page;
-    document.getElementById('pageLeads').style.display    = page==='leads'    ? 'flex' : 'none';
-    document.getElementById('pageSms').style.display      = page==='sms'      ? 'flex' : 'none';
-    document.getElementById('pageEmail').style.display    = page==='email'    ? 'flex' : 'none';
-    document.getElementById('pageBookings').style.display = page==='bookings' ? 'flex' : 'none';
-    document.getElementById('pageSettings').style.display = page==='settings' ? 'flex' : 'none';
-    document.getElementById('navLeads').classList.toggle('active', page==='leads');
-    document.getElementById('navSms').classList.toggle('active', page==='sms');
-    document.getElementById('navEmail').classList.toggle('active', page==='email');
-    document.getElementById('navBookings').classList.toggle('active', page==='bookings');
-    document.getElementById('navSettings').classList.toggle('active', page==='settings');
-
-    const client = currentClientList.find(c=>c.id===currentClientId);
-    const meta = PAGE_META[page];
-    document.getElementById('pageHeadTitle').textContent = meta.title;
-    document.getElementById('pageHeadSub').textContent = client ? meta.sub(client) : 'Select a client to get started';
-
-    refreshCurrentPage();
-  }
-
-  function refreshCurrentPage(silent){
-    if(!currentClientId)return;
-    if(currentPage==='leads')    return loadLeads(silent);
-    if(currentPage==='sms')      return loadSmsPage(silent);
-    if(currentPage==='email')    return loadEmailPage(silent);
-    if(currentPage==='bookings') return loadBookingsPage(silent);
-    if(currentPage==='settings') return loadSettingsPage(silent);
-  }
-
-  /* ── LEADS ── */
-  async function loadLeads(){
-    if(!currentClientId)return;
-    try{
-      const leads=await api(`/clients/${currentClientId}/leads`);
-      allLeads=leads||[];
-      renderStats();
-      renderLeads();
-    }catch(e){console.error(e);}
-  }
-
-  function renderStats(){
-    const c=s=>allLeads.filter(l=>l.status===s).length;
-    document.getElementById('sTotal').textContent=allLeads.length;
-    document.getElementById('sNew').textContent=c('new');
-    document.getElementById('sAttempted').textContent=c('attempted');
-    document.getElementById('sContacted').textContent=c('contacted');
-    document.getElementById('sBooked').textContent=c('booked');
-    document.getElementById('sDead').textContent=c('dead');
-    document.getElementById('sNurture').textContent=c('nurture');
-  }
-
-  function renderLeads(){
-    const filtered=currentFilter==='all'?allLeads:allLeads.filter(l=>l.status===currentFilter);
-    const wrap=document.getElementById('leadsWrap');
-    if(filtered.length===0){
-      wrap.innerHTML=`<div class="empty"><h3>No leads here</h3><p>Inject a test lead or wait for Meta leads to come in.</p></div>`;
-      return;
-    }
-    wrap.innerHTML=filtered.map(lead=>{
-      const lastAction = lead.last_action || 'No contact yet';
-      const attempts = lead.attempt_count || 0;
-      const ago = timeAgo(lead.updated_at||lead.created_at);
-      return `
-      <div class="lead-card" onclick="openLead('${lead.id}')">
-        <div class="lead-row1">
-          <div class="lead-name-wrap">
-            <div class="lead-name">${lead.name||'Unknown'}</div>
-            <div class="lead-phone">${lead.phone||''}</div>
-          </div>
-          <span class="badge ${lead.status}">${lead.status}</span>
-        </div>
-        <div class="lead-row2">
-          <div class="lead-last">
-            Last: <strong>${lastAction}</strong>
-            ${lead.offer_seen?`&nbsp;·&nbsp;${lead.offer_seen}`:''}
-          </div>
-          <div class="lead-meta">
-            <div class="lead-attempts">${attempts} attempt${attempts!==1?'s':''}</div>
-            <div class="lead-time">${ago}</div>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  /* ── SMS PAGE ── */
-  /* ── SMS PAGE — Templates (composer) and History (sent log) ── */
-  let smsSubTab = 'history';
-
-  function setSmsSubTab(tab){
-    smsSubTab = tab;
-    document.getElementById('smsSubTemplates').classList.toggle('active', tab==='templates');
-    document.getElementById('smsSubHistory').classList.toggle('active', tab==='history');
-    loadSmsPage();
-  }
-
-  async function loadSmsPage(silent){
-    if(smsSubTab==='templates') return loadSmsTemplates(silent);
-    return loadSmsHistory(silent);
-  }
-
-  const SMS_SLOT_META = [
-    { slot:'no_answer_1',      title:'1st missed-call text',          sub:'Sent right after the 1st no-answer. Goes out immediately, no timing rule.', timing:false },
-    { slot:'no_answer_2',      title:'2nd missed-call text',          sub:'Sent right after the 2nd no-answer. Goes out immediately, no timing rule.', timing:false },
-    { slot:'no_answer_final',  title:'Final missed-call text',        sub:'Sent right after the final no-answer attempt. Goes out immediately, no timing rule.', timing:false },
-    { slot:'followup_morning', title:'Answered, not booked, morning variant', sub:'Sent the next morning, if the call was answered in the evening', timing:true },
-    { slot:'followup_evening', title:'Answered, not booked, evening variant', sub:'Sent that same evening, if the call was answered in the morning', timing:true },
-  ];
-
-  const TEMPLATE_VARS = ['first_name','offer','business_name'];
-
-  async function loadSmsTemplates(silent){
-    const wrap=document.getElementById('smsWrap');
-    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
-    try{
-      const templates = await api(`/clients/${currentClientId}/sms-templates`);
-      wrap.innerHTML = `<div class="composer-wrap">` + SMS_SLOT_META.map(meta=>`
-        <div class="template-card ${meta.timing?'timing':''}">
-          <div class="template-head">
-            <div>
-              <div class="template-title">${meta.title}</div>
-              <div class="template-sub">${meta.sub}</div>
-            </div>
-          </div>
-          <div style="margin-bottom:8px;">
-            ${TEMPLATE_VARS.map(v=>`<button class="var-pill" onclick="insertVar('${meta.slot}','${v}')">{{${v}}}</button>`).join('')}
-          </div>
-          <textarea class="template-box" id="tpl_${meta.slot}" rows="3">${templates[meta.slot]||''}</textarea>
-          <div class="template-save-row">
-            <button class="btn sm primary" onclick="saveTemplate('${meta.slot}')">Save</button>
-            <span class="saved-tag" id="saved_${meta.slot}">Saved</span>
-          </div>
-        </div>
-      `).join('') + `</div>`;
-    }catch(e){
-      wrap.innerHTML='<div class="empty"><h3>Could not load templates</h3></div>';
-    }
-  }
-
-  function insertVar(slot, varName){
-    const box = document.getElementById(`tpl_${slot}`);
-    const pos = box.selectionStart || box.value.length;
-    const insert = `{{${varName}}}`;
-    box.value = box.value.slice(0,pos) + insert + box.value.slice(pos);
-    box.focus();
-  }
-
-  async function saveTemplate(slot){
-    const message = document.getElementById(`tpl_${slot}`).value;
-    try{
-      await api(`/clients/${currentClientId}/sms-templates/${slot}`,{
-        method:'PATCH', body:JSON.stringify({ message })
-      });
-      const tag=document.getElementById(`saved_${slot}`);
-      tag.style.display='inline';
-      setTimeout(()=>{tag.style.display='none';},2000);
-    }catch(e){
-      alert('Failed to save template');
-    }
-  }
-
-  async function loadSmsHistory(silent){
-    const wrap=document.getElementById('smsWrap');
-    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
-    try{
-      const [scheduled, sent] = await Promise.all([
-        api(`/clients/${currentClientId}/scheduled/sms`),
-        api(`/clients/${currentClientId}/activity/sms`),
-      ]);
-
-      let html = '';
-
-      if(scheduled && scheduled.length>0){
-        html += `<div class="section-label">Scheduled</div>`;
-        html += scheduled.map(r=>`
-          <div class="lead-card" style="cursor:default;">
-            <div class="lead-row1">
-              <div class="lead-name-wrap">
-                <div class="lead-name">${escapeHtml(r.lead?.name||'Unknown lead')}</div>
-                <div class="lead-phone">${escapeHtml(r.lead?.phone||'')}</div>
-              </div>
-              <span class="badge nurture">${timeUntil(r.scheduled_for)}</span>
-            </div>
-            <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
-              <div class="lead-last" style="white-space:normal;">Going out ${formatDate(r.scheduled_for)}</div>
-              <div class="lead-last" style="white-space:normal;color:var(--muted);">${escapeHtml(r.message||'')}</div>
-            </div>
-          </div>`).join('');
-      }
-
-      if(sent && sent.length>0){
-        html += `<div class="section-label">Sent</div>`;
-        html += sent.map(r=>`
-          <div class="lead-card" style="cursor:default;">
-            <div class="lead-row1">
-              <div class="lead-name-wrap">
-                <div class="lead-name">${escapeHtml(r.lead?.name||'Unknown lead')}</div>
-                <div class="lead-phone">${escapeHtml(r.lead?.phone||'')}</div>
-              </div>
-              <span class="badge ${r.outcome==='sent'?'contacted':'dead'}">${r.outcome}</span>
-            </div>
-            <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
-              <div class="lead-last" style="white-space:normal;">${escapeHtml(r.notes||'')}</div>
-              <div class="lead-time">${timeAgo(r.created_at)}</div>
-            </div>
-          </div>`).join('');
-      }
-
-      if(!html){
-        html = '<div class="empty"><h3>No SMS yet</h3><p>Scheduled and sent texts will show up here.</p></div>';
-      }
-
-      wrap.innerHTML = html;
-    }catch(e){
-      wrap.innerHTML='<div class="empty"><h3>Could not load SMS activity</h3></div>';
-    }
-  }
-
-  /* ── EMAIL PAGE — Sequence (builder) and History (sent log) ── */
-  let emailSubTab = 'history';
-  let expandedStep = null;
-
-  function setEmailSubTab(tab){
-    emailSubTab = tab;
-    document.getElementById('emailSubBuilder').classList.toggle('active', tab==='builder');
-    document.getElementById('emailSubHistory').classList.toggle('active', tab==='history');
-    loadEmailPage();
-  }
-
-  async function loadEmailPage(silent){
-    if(emailSubTab==='builder') return loadEmailSequence(silent);
-    return loadEmailHistory(silent);
-  }
-
-  // In-memory cache of the last loaded steps, so addSeqStep() can show a
-  // new blank step immediately alongside the real existing ones without
-  // a round trip — saving for real still only happens once Save Step is
-  // clicked, against the backend.
-  let _emailStepsCache = [];
-
-  async function loadEmailSequence(silent){
-    const wrap=document.getElementById('emailWrap');
-    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
-    try{
-      const steps = await api(`/clients/${currentClientId}/email-sequence`);
-      _emailStepsCache = steps || [];
-      renderEmailSequence(_emailStepsCache);
-    }catch(e){
-      wrap.innerHTML='<div class="empty"><h3>Could not load email sequence</h3></div>';
-    }
-  }
-
-  function renderEmailSequence(steps){
-    const wrap=document.getElementById('emailWrap');
-    const nextStepNum = steps.length>0 ? Math.max(...steps.map(s=>s.step_order))+1 : 1;
-
-    let html = `<div class="seq-wrap">`;
-    if(steps.length===0){
-      html += `<div class="empty" style="padding:30px 0;"><h3>No steps yet</h3><p>Add the first email in this client's nurture sequence.</p></div>`;
-    }
-    steps.sort((a,b)=>a.step_order-b.step_order).forEach(step=>{
-      const isOpen = expandedStep===step.step_order;
-      if(isOpen){
-        html += `
-          <div class="seq-row expanded">
-            <div class="seq-edit-body" style="width:100%;">
-              <div class="template-head">
-                <div class="seq-row-title"><span class="seq-num">${step.step_order}</span>Step ${step.step_order}</div>
-                <span class="seq-delete" onclick="deleteSeqStep(${step.step_order})">Delete</span>
-              </div>
-              <div class="fg"><label>Days after previous step</label><input type="number" min="1" id="seqDelay_${step.step_order}" value="${step.delay_days}"/></div>
-              <div class="fg"><label>Subject</label><input id="seqSubject_${step.step_order}" value="${escapeAttr(step.subject)}"/></div>
-              <div class="fg"><label>Body</label><textarea class="template-box" id="seqBody_${step.step_order}" rows="4">${step.body}</textarea></div>
-              <button class="btn sm primary" onclick="saveSeqStep(${step.step_order})">Save Step</button>
-              <button class="btn sm" onclick="expandedStep=null;loadEmailSequence();">Collapse</button>
-            </div>
-          </div>`;
-      }else{
-        html += `
-          <div class="seq-row" onclick="expandStep(${step.step_order})">
-            <div><span class="seq-num">${step.step_order}</span><span class="seq-row-title">${escapeHtml(step.subject)}</span><span class="seq-row-delay">${step.delay_days}d after previous</span></div>
-            <span class="seq-expand-hint">▾ expand</span>
-          </div>`;
-      }
-    });
-    html += `<button class="btn sm" onclick="addSeqStep(${nextStepNum})">+ Add Step</button>`;
-    html += `</div>`;
-    wrap.innerHTML = html;
-  }
-
-  function expandStep(stepOrder){
-    expandedStep = stepOrder;
-    loadEmailSequence();
-  }
-
-  function addSeqStep(stepOrder){
-    expandedStep = stepOrder;
-    renderEmailSequence([
-      ..._emailStepsCache,
-      { step_order: stepOrder, delay_days: 7, subject: '', body: '' }
-    ]);
-  }
-
-  async function saveSeqStep(stepOrder){
-    const delay_days = parseInt(document.getElementById(`seqDelay_${stepOrder}`).value,10) || 7;
-    const subject = document.getElementById(`seqSubject_${stepOrder}`).value.trim();
-    const body = document.getElementById(`seqBody_${stepOrder}`).value.trim();
-    if(!subject || !body) return alert('Subject and body are required');
-    try{
-      await api(`/clients/${currentClientId}/email-sequence/${stepOrder}`,{
-        method:'PUT', body:JSON.stringify({ delay_days, subject, body })
-      });
-      expandedStep = null;
-      loadEmailSequence();
-    }catch(e){
-      alert('Failed to save step');
-    }
-  }
-
-  async function deleteSeqStep(stepOrder){
-    if(!confirm(`Delete step ${stepOrder}?`)) return;
-    try{
-      await api(`/clients/${currentClientId}/email-sequence/${stepOrder}`,{ method:'DELETE' });
-      expandedStep = null;
-      loadEmailSequence();
-    }catch(e){
-      alert('Failed to delete step');
-    }
-  }
-
-  function escapeHtml(s){ return (s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-  function escapeAttr(s){ return escapeHtml(s).replace(/'/g,'&#39;'); }
-
-  async function loadEmailHistory(silent){
-    const wrap=document.getElementById('emailWrap');
-    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
-    try{
-      const [scheduled, sent] = await Promise.all([
-        api(`/clients/${currentClientId}/scheduled/email`),
-        api(`/clients/${currentClientId}/activity/email`),
-      ]);
-
-      let html = '';
-
-      if(scheduled && scheduled.length>0){
-        html += `<div class="section-label">Scheduled</div>`;
-        html += scheduled.map(r=>`
-          <div class="lead-card" style="cursor:default;">
-            <div class="lead-row1">
-              <div class="lead-name-wrap">
-                <div class="lead-name">${escapeHtml(r.lead?.name||'Unknown lead')}</div>
-                <div class="lead-phone">${escapeHtml(r.lead?.email||'')}</div>
-              </div>
-              <span class="badge nurture">${timeUntil(r.next_send_at)}</span>
-            </div>
-            <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
-              <div class="lead-last" style="white-space:normal;">Going out ${formatDate(r.next_send_at)}</div>
-              <div class="lead-last" style="white-space:normal;color:var(--muted);">Step ${r.step_number} of the follow-up sequence</div>
-            </div>
-          </div>`).join('');
-      }
-
-      if(sent && sent.length>0){
-        html += `<div class="section-label">Sent</div>`;
-        html += sent.map(r=>`
-          <div class="lead-card" style="cursor:default;">
-            <div class="lead-row1">
-              <div class="lead-name-wrap">
-                <div class="lead-name">${escapeHtml(r.lead?.name||'Unknown lead')}</div>
-                <div class="lead-phone">${escapeHtml(r.lead?.email||'')}</div>
-              </div>
-              <span class="badge ${r.outcome==='sent'?'contacted':'dead'}">${r.outcome}</span>
-            </div>
-            <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
-              <div class="lead-last" style="white-space:normal;">${escapeHtml(r.notes||'')}</div>
-              <div class="lead-time">${timeAgo(r.created_at)}</div>
-            </div>
-          </div>`).join('');
-      }
-
-      if(!html){
-        html = '<div class="empty"><h3>No emails yet</h3><p>Scheduled and sent follow-up emails will show up here.</p></div>';
-      }
-
-      wrap.innerHTML = html;
-    }catch(e){
-      wrap.innerHTML='<div class="empty"><h3>Could not load email activity</h3></div>';
-    }
-  }
-
-  /* ── BOOKINGS PAGE ── */
-  async function loadBookingsPage(silent){
-    const wrap=document.getElementById('bookingsWrap');
-    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
-    try{
-      const rows=await api(`/clients/${currentClientId}/bookings`);
-      if(!rows||rows.length===0){
-        wrap.innerHTML='<div class="empty"><h3>No bookings yet</h3><p>Confirmed bookings, reschedules, and cancellations will show up here.</p></div>';
-        return;
-      }
-      const eventBadge={booked:'booked',rescheduled:'attempted',cancelled:'dead'};
-      wrap.innerHTML=rows.map(r=>`
-        <div class="lead-card" style="cursor:default;">
-          <div class="lead-row1">
-            <div class="lead-name-wrap">
-              <div class="lead-name">${r.lead?.name||'Unknown lead'}</div>
-              <div class="lead-phone">${r.lead?.phone||''}</div>
-            </div>
-            <span class="badge ${eventBadge[r.event_type]||'new'}">${r.event_type}</span>
-          </div>
-          <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
-            <div class="lead-last" style="white-space:normal;">
-              ${r.appointment_date?('Appointment: '+formatDate(r.appointment_date)):''}
-              ${r.notes?(' · '+r.notes):''}
-            </div>
-            <div class="lead-time">${timeAgo(r.created_at)}</div>
-          </div>
-        </div>`).join('');
-    }catch(e){
-      wrap.innerHTML='<div class="empty"><h3>Could not load bookings</h3></div>';
-    }
-  }
-
-  /* ── SETTINGS PAGE ── */
-  const COMMON_TIMEZONES=[
-    'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
-    'America/Phoenix','America/Anchorage','Pacific/Honolulu',
-    'America/Toronto','America/Vancouver',
-    'Europe/London','Europe/Dublin',
-  ];
-
-  async function loadSettingsPage(silent){
-    const wrap=document.getElementById('settingsWrap');
-    if(!silent) wrap.innerHTML='<div class="empty"><h3>Loading...</h3></div>';
-    try{
-      const { timezone, settings } = await api(`/clients/${currentClientId}/settings`);
-
-      const tzOptions = COMMON_TIMEZONES.map(tz=>
-        `<option value="${tz}" ${tz===timezone?'selected':''}>${tz.replace('_',' ')}</option>`
-      ).join('');
-
-      wrap.innerHTML = `
-        <div class="settings-section">
-          <h3>Business Timezone</h3>
-          <div class="fg">
-            <label>Used for all "morning"/"evening" SMS timing for this client's leads</label>
-            <select id="setTimezone">${tzOptions}</select>
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <h3>Follow-up SMS Timing</h3>
-          <div class="settings-row">
-            <div class="fg"><label>Morning cutoff (hour, 24h)</label><input id="setMorningCutoff" type="number" min="0" max="23" value="${settings.sms_morning_cutoff_hour}"/></div>
-            <div class="fg"><label>Evening cutoff (hour, 24h)</label><input id="setEveningCutoff" type="number" min="0" max="23" value="${settings.sms_evening_cutoff_hour}"/></div>
-          </div>
-          <div class="settings-hint">Calls answered before the morning cutoff get an SMS that evening. Calls answered at or after the evening cutoff get an SMS the next morning. In between, SMS goes out a few hours later the same day.</div>
-
-          <div class="settings-row">
-            <div class="fg"><label>Same-day delay (hours)</label><input id="setSameDayDelay" type="number" min="1" max="12" value="${settings.sms_same_day_delay_hours}"/></div>
-          </div>
-
-          <div class="settings-row">
-            <div class="fg"><label>Evening SMS sent at</label><input id="setAfterMorningTime" type="time" value="${settings.sms_after_morning_time}"/></div>
-            <div class="fg"><label>Next-morning SMS sent at</label><input id="setAfterEveningTime" type="time" value="${settings.sms_after_evening_time}"/></div>
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <h3>Call Follow-up Sequence</h3>
-          <div class="fg"><label>Max attempts before moving to nurture</label><input id="setMaxAttempts" type="number" min="1" max="10" value="${settings.max_hot_attempts}"/></div>
-        </div>
-
-        <button class="btn primary" onclick="saveSettings()">Save Settings</button>
-        <span id="settingsSavedMsg" style="margin-left:10px;font-size:12px;color:#1a7a1a;display:none;">Saved</span>
-      `;
-    }catch(e){
-      wrap.innerHTML='<div class="empty"><h3>Could not load settings</h3></div>';
-    }
-  }
-
-  async function saveSettings(){
-    const followup_settings = {
-      sms_morning_cutoff_hour: parseInt(document.getElementById('setMorningCutoff').value, 10),
-      sms_evening_cutoff_hour: parseInt(document.getElementById('setEveningCutoff').value, 10),
-      sms_same_day_delay_hours: parseInt(document.getElementById('setSameDayDelay').value, 10),
-      sms_after_morning_time: document.getElementById('setAfterMorningTime').value,
-      sms_after_evening_time: document.getElementById('setAfterEveningTime').value,
-      max_hot_attempts: parseInt(document.getElementById('setMaxAttempts').value, 10),
-    };
-    const timezone = document.getElementById('setTimezone').value;
-
-    try{
-      await api(`/clients/${currentClientId}/settings`,{
-        method:'PATCH',
-        body:JSON.stringify({ timezone, followup_settings })
-      });
-      const msg=document.getElementById('settingsSavedMsg');
-      msg.style.display='inline';
-      setTimeout(()=>{msg.style.display='none';},2000);
-    }catch(e){
-      alert('Failed to save settings');
-    }
-  }
-
-  /* ── LEAD PANEL ── */
-  async function openLead(leadId){
-    const lead=allLeads.find(l=>l.id===leadId);
-    if(!lead)return;
-    currentLeadId=leadId;
-    deleteArmed=false; // never let an armed delete carry over to a different lead
-    clearTimeout(deleteResetTimer);
-    const deleteBtn = document.querySelector('.danger-zone .btn.danger');
-    if(deleteBtn) deleteBtn.textContent = 'Delete this lead';
-    document.getElementById('pName').textContent=lead.name||'Unknown name';
-    document.getElementById('pId').textContent=lead.id;
-    document.getElementById('pPhone').textContent=lead.phone||'Not provided';
-    document.getElementById('pEmail').textContent=lead.email||'Not provided';
-    document.getElementById('pOffer').textContent=lead.offer_seen||'Not recorded';
-    document.getElementById('pAdded').textContent=formatDate(lead.created_at);
-    document.getElementById('pStatus').value=lead.status;
-    document.getElementById('pNextStep').textContent=nextStepFor(lead);
-    document.getElementById('pActivity').innerHTML='<div style="color:var(--muted);font-size:12px;">Loading...</div>';
-    document.getElementById('pCalls').innerHTML='<div style="color:var(--muted);font-size:12px;">Loading...</div>';
-    document.getElementById('internalPanel').classList.remove('open');
-    document.getElementById('internalToggleLabel').textContent='Show internal details';
-    document.getElementById('internalToggleArrow').textContent='▾';
-    document.getElementById('panelOverlay').classList.add('open');
-    try{
-      const acts=await api(`/leads/${leadId}/activity`);
-      const el=document.getElementById('pActivity');
-      if(!acts||acts.length===0){
-        el.innerHTML='<div style="color:var(--muted);font-size:12px;">No activity yet.</div>';
-      }else{
-        el.innerHTML=acts.map((a,i)=>{
-          // call_summary/sentiment/transcript only exist on rows that
-          // came from Retell's call_ended/call_analyzed webhook — most
-          // activity rows (SMS, no-answer calls) won't have them, so
-          // each piece only renders when actually present.
-          const summaryLine = a.call_summary
-            ? `<div class="act-summary"><strong>Summary:</strong> ${escapeHtml(a.call_summary)}</div>` : '';
-          const sentimentTag = a.sentiment
-            ? `<span class="badge ${a.sentiment==='negative'?'dead':a.sentiment==='positive'?'booked':'new'}" style="margin-left:6px;">${escapeHtml(a.sentiment)}</span>` : '';
-          const durationTag = a.duration_seconds
-            ? `<span class="act-duration">${Math.floor(a.duration_seconds/60)}:${String(a.duration_seconds%60).padStart(2,'0')}</span>` : '';
-          const transcriptToggle = a.transcript
-            ? `<div class="act-transcript-toggle" onclick="toggleTranscript(${i})">▾ View transcript</div>
-               <div class="act-transcript" id="transcript_${i}" style="display:none;">${escapeHtml(a.transcript)}</div>` : '';
-
-          return `
-          <div class="act-item" style="flex-direction:column;align-items:flex-start;">
-            <div style="display:flex;gap:10px;width:100%;align-items:flex-start;">
-              <span class="act-type">${a.activity_type}</span>
-              <span class="act-out"><strong>${a.outcome}</strong>${a.notes?', '+escapeHtml(a.notes):''}${sentimentTag}</span>
-              ${durationTag}
-              <span class="act-time">${timeAgo(a.created_at)}</span>
-            </div>
-            ${summaryLine}
-            ${transcriptToggle}
-          </div>`;
-        }).join('');
-      }
-
-      // Now that real activity data has loaded, refresh the Next Step
-      // text using the most recent call's actual summary if one exists,
-      // instead of the generic status-based guess shown while loading.
-    }catch(e){console.error(e);}
-
-    // Call History — separate fetch from /activity above. Reads the
-    // dedicated ldm_calls table (transcript, summary, sentiment,
-    // outcome, duration), so it stays correct even though plain
-    // activity rows (SMS sends, no-answer attempts) never carry these
-    // fields. Shown directly under Status/Next Step, not hidden behind
-    // "Show internal details" — call content is core info, not
-    // internal debugging.
-    try{
-      const calls = await api(`/leads/${leadId}/calls`);
-      const callsEl = document.getElementById('pCalls');
-      if(!calls || calls.length===0){
-        callsEl.innerHTML = '<div style="color:var(--muted);font-size:12px;">No calls yet.</div>';
-      } else {
-        callsEl.innerHTML = calls.map((c,i)=>{
-          const outcomeLabel = c.outcome
-            ? c.outcome.replace(/_/g,' ')
-            : (c.call_status || 'completed');
-          const statusBadgeClass = c.outcome==='not_interested' ? 'dead'
-            : c.outcome==='booked' ? 'booked'
-            : c.outcome==='voicemail' ? 'new'
-            : c.outcome==='call_back_later' ? 'attempted'
-            : 'contacted';
-          const sentimentTag = c.sentiment
-            ? `<span class="badge ${c.sentiment==='negative'?'dead':c.sentiment==='positive'?'booked':'new'}" style="margin-left:6px;">${escapeHtml(c.sentiment)}</span>` : '';
-          const durationTag = c.duration_seconds
-            ? `<span class="act-duration">${Math.floor(c.duration_seconds/60)}:${String(c.duration_seconds%60).padStart(2,'0')}</span>` : '';
-          const summaryLine = c.summary
-            ? `<div class="act-summary"><strong>Summary:</strong> ${escapeHtml(c.summary)}</div>` : '';
-          const transcriptToggle = c.transcript
-            ? `<div class="act-transcript-toggle" onclick="toggleCallTranscript(${i})">▾ View transcript</div>
-               <div class="act-transcript" id="call_transcript_${i}" style="display:none;">${escapeHtml(c.transcript)}</div>` : '';
-          const recordingLink = c.recording_url
-            ? `<div style="margin-top:4px;"><a href="${c.recording_url}" target="_blank" rel="noopener" style="font-size:11px;">▶ Listen to recording</a></div>` : '';
-
-          return `
-          <div class="act-item" style="flex-direction:column;align-items:flex-start;">
-            <div style="display:flex;gap:10px;width:100%;align-items:flex-start;">
-              <span class="badge ${statusBadgeClass}">${escapeHtml(outcomeLabel)}</span>
-              ${durationTag}
-              ${sentimentTag}
-              <span class="act-time">${timeAgo(c.created_at)}</span>
-            </div>
-            ${summaryLine}
-            ${transcriptToggle}
-            ${recordingLink}
-          </div>`;
-        }).join('');
-      }
-
-      const mostRecentCallWithSummary = (calls||[]).find(c => c.summary);
-      document.getElementById('pNextStep').textContent = nextStepFor(lead, mostRecentCallWithSummary);
-    }catch(e){
-      console.error(e);
-      document.getElementById('pCalls').innerHTML = '<div style="color:var(--muted);font-size:12px;">Could not load calls.</div>';
-    }
-  }
-
-  function toggleCallTranscript(i){
-    const el = document.getElementById(`call_transcript_${i}`);
-    if(!el) return;
-    el.style.display = el.style.display==='none' ? 'block' : 'none';
-  }
-
-  function toggleTranscript(i){
-    const el = document.getElementById(`transcript_${i}`);
-    el.style.display = el.style.display==='none' ? 'block' : 'none';
-  }
-
-  function closePanel(){document.getElementById('panelOverlay').classList.remove('open');}
-
-  function nextStepFor(lead, recentCallActivity){
-    const attempts = lead.attempt_count || 0;
-    switch(lead.status){
-      case 'new':
-        return 'This lead will be called shortly.';
-      case 'attempted':
-        if (attempts <= 1) return "No answer yet. We'll try calling again tomorrow.";
-        if (attempts === 2) return "Still haven't reached them. We'll call and text again tomorrow.";
-        if (attempts === 3) return "One more call and text are scheduled, then we'll hold off for a while.";
-        return "We've made our last attempt for now. They'll start hearing from us occasionally by email instead.";
-      case 'contacted':
-        // Report what actually happened on the call, once Retell's real
-        // summary has arrived, instead of guessing. Falls back to the
-        // generic line only while that data is still loading or hasn't
-        // come through yet (e.g. before the Retell webhook URL is set).
-        if (recentCallActivity && recentCallActivity.summary){
-          return recentCallActivity.summary;
-        }
-        return "We spoke with this lead. Waiting on the call summary to come through.";
-      case 'booked':
-        return "All set. This appointment is confirmed, nothing else needed.";
-      case 'dead':
-        return "This lead wasn't interested, so we've stopped reaching out.";
-      case 'nurture':
-        return "Not ready yet. We'll check in by email every couple of weeks to stay on their radar.";
-      default:
-        return 'No update yet.';
-    }
-  }
-
-  function toggleInternal(){
-    const panel=document.getElementById('internalPanel');
-    const label=document.getElementById('internalToggleLabel');
-    const arrow=document.getElementById('internalToggleArrow');
-    const open=panel.classList.toggle('open');
-    label.textContent = open ? 'Hide internal details' : 'Show internal details';
-    arrow.textContent = open ? '▴' : '▾';
-  }
-
-  function closePanelOnBg(e){if(e.target===document.getElementById('panelOverlay'))closePanel();}
-
-  async function updateStatus(){
-    const s=document.getElementById('pStatus').value;
-    try{
-      await api(`/leads/${currentLeadId}`,{method:'PATCH',body:JSON.stringify({status:s})});
-      const lead=allLeads.find(l=>l.id===currentLeadId);
-      if(lead)lead.status=s;
-      renderStats();renderLeads();
-    }catch(e){alert('Failed to update status');}
-  }
-
-  /* ── CALL LEAD ── */
-  const CALL_STATUS_TEXT = {
-    connecting: (n)=>`Calling ${n}...`,
-    ringing:    (n)=>`Ringing ${n}...`,
-    answered:   (n)=>`On call with ${n}`,
-    declined:   (n)=>`${n} declined`,
-    ended:      (n)=>`Call with ${n} ended`,
-    failed:     (n)=>`Call to ${n} failed to connect`,
-  };
-
-  async function callLead(){
-    const lead=allLeads.find(l=>l.id===currentLeadId);
-    if(!lead)return;
-    closePanel();
-
-    const bar=document.getElementById('callingBar');
-    document.getElementById('callingText').textContent=CALL_STATUS_TEXT.connecting(lead.name||'lead');
-    bar.classList.add('show');
-
-    try{
-      await api('/call',{method:'POST',body:JSON.stringify({lead_id:currentLeadId})});
-    }catch(e){
-      console.error(e);
-      document.getElementById('callingText').textContent=CALL_STATUS_TEXT.failed(lead.name||'lead');
-      setTimeout(()=>bar.classList.remove('show'),3000);
-      return;
-    }
-
-    loadLeads();
-    pollCallStatus(lead);
-  }
-
-  let callStatusPoll=null;
-
-  function pollCallStatus(lead){
-    clearInterval(callStatusPoll);
-    const bar=document.getElementById('callingBar');
-
-    callStatusPoll = setInterval(async ()=>{
-      try{
-        const data = await api('/simulator/status');
-        const label = CALL_STATUS_TEXT[data.status];
-        if(label){
-          document.getElementById('callingText').textContent = label(lead.name||'lead');
-        }
-        if(data.status==='idle'){
-          clearInterval(callStatusPoll);
-          bar.classList.remove('show');
-          loadLeads();
-        }
-        if(data.status==='declined' || data.status==='ended'){
-          loadLeads();
-        }
-      }catch(e){
-        // backend hiccup — keep the bar as-is, try again next tick
-      }
-    }, 1200);
-  }
-
-  function dismissCalling(){
-    clearInterval(callStatusPoll);
-    document.getElementById('callingBar').classList.remove('show');
-  }
-
-  /* ── SIMULATE OUTCOME (internal testing only) ── */
-  async function simulateOutcome(kind){
-    try{
-      await api(`/simulate/${kind}`,{method:'POST',body:JSON.stringify({lead_id:currentLeadId})});
-      await loadLeads();
-      const lead=allLeads.find(l=>l.id===currentLeadId);
-      if(lead) openLead(lead.id);
-    }catch(e){
-      alert('Simulate failed: '+e.message);
-    }
-  }
-
-  // No popup confirm dialog by design — the button itself becomes the
-  // confirmation. First click swaps its own label to "Click again to
-  // confirm" and arms a 4s window; a second click within that window
-  // actually deletes. Clicking anywhere else, or waiting past 4s,
-  // quietly resets it back to normal.
-  let deleteArmed = false;
-  let deleteResetTimer = null;
-
-  function deleteLeadConfirm(){
-    const btn = document.querySelector('.danger-zone .btn.danger');
-    if(!deleteArmed){
-      deleteArmed = true;
-      btn.textContent = 'Click again to confirm';
-      deleteResetTimer = setTimeout(()=>{
-        deleteArmed = false;
-        btn.textContent = 'Delete this lead';
-      }, 4000);
-      return;
-    }
-    clearTimeout(deleteResetTimer);
-    deleteArmed = false;
-    performDeleteLead();
-  }
-
-  async function performDeleteLead(){
-    try{
-      await api(`/leads/${currentLeadId}`,{method:'DELETE'});
-      closePanel();
-      await loadLeads();
-    }catch(e){
-      alert('Failed to delete lead: '+e.message);
-    }
-  }
-
-  /* ── FILTER ── */
-  function setFilter(f,btn){
-    currentFilter=f;
-    document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    renderLeads();
-  }
-
-  /* ── ADD CLIENT ── */
-  function openAddClient(){
-    document.getElementById('clientDropdown').classList.remove('open');
-    document.getElementById('addClientModal').classList.add('open');
-  }
-  async function saveClient(){
-    const name=document.getElementById('cName').value.trim();
-    if(!name)return alert('Business name required');
-    try{
-      const newClient = await api('/clients',{method:'POST',body:JSON.stringify({
-        business_name:name,name,
-        niche:document.getElementById('cNiche').value.trim(),
-        email:document.getElementById('cEmail').value.trim(),
-        phone:document.getElementById('cPhone').value.trim()
-      })});
-      closeModal('addClientModal');
-      ['cName','cNiche','cEmail','cPhone'].forEach(id=>document.getElementById(id).value='');
-      await loadClients();
-      if(newClient && newClient.id) selectClient(newClient);
-    }catch(e){alert('Failed to save client');}
-  }
-
-  /* ── INJECT LEAD ── */
-  function openInjectLead(){
-    if(!currentClientId)return alert('Select a client first');
-    document.getElementById('injectModal').classList.add('open');
-  }
-  async function injectLead(){
-    try{
-      await fetch(`${API}/webhook/meta`,{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          client_id:currentClientId,
-          name:document.getElementById('iName').value||'Test Lead',
-          phone:document.getElementById('iPhone').value||'+1234567890',
-          email:document.getElementById('iEmail').value||'test@example.com',
-          offer_seen:document.getElementById('iOffer').value||'Free roofing inspection',
-          demo:document.getElementById('iDemo').checked
-        })
-      });
-      closeModal('injectModal');
-      setTimeout(loadLeads,1000);
-    }catch(e){alert('Failed to inject lead');}
-  }
-
-  /* ── UTILS ── */
-  function closeModal(id){document.getElementById(id).classList.remove('open');}
-
-  function parseUtc(iso){
-    if(!iso)return null;
-    // Supabase timestamps without a 'Z' suffix are UTC but get
-    // misread as local time by Date() — append 'Z' if it's missing
-    // so every date comparison/display is correctly anchored to UTC.
-    return new Date(iso.endsWith('Z')||iso.includes('+')?iso:iso+'Z');
-  }
-
-  function formatDate(iso){
-    const d=parseUtc(iso);
-    if(!d)return'Not set';
-    return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'})+' '+
-           d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  }
-
-  function timeAgo(iso){
-    const d=parseUtc(iso);
-    if(!d)return'Unknown';
-    const diff=Date.now()-d.getTime();
-    const m=Math.floor(diff/60000);
-    if(m<1)return'just now';
-    if(m<60)return`${m}m ago`;
-    const h=Math.floor(m/60);
-    if(h<24)return`${h}h ago`;
-    return`${Math.floor(h/24)}d ago`;
-  }
-
-  // Forward-looking version of timeAgo, for items still pending — used
-  // on the Scheduled sections of the SMS and Email pages.
-  function timeUntil(iso){
-    const d=parseUtc(iso);
-    if(!d)return'Not scheduled yet';
-    const diff=d.getTime()-Date.now();
-    if(diff<=0)return'Sending shortly';
-    const m=Math.floor(diff/60000);
-    if(m<1)return'Sending shortly';
-    if(m<60)return`In ${m}m`;
-    const h=Math.floor(m/60);
-    if(h<24)return`In ${h}h`;
-    return`In ${Math.floor(h/24)}d`;
-  }
-
-  document.querySelectorAll('.modal-overlay').forEach(o=>{
-    o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open');});
-  });
-
-  loadClients();
-  // Periodic background refresh — every 30s. Two real concerns this
-  // addresses: (1) it should never wipe the screen to a "Loading..."
-  // blank state on a routine tick, only on a genuine first load, and
-  // (2) it must NEVER touch pages with live editable fields (SMS
-  // Templates, Email Sequence editor) — overwriting their innerHTML
-  // mid-edit would silently destroy whatever someone is in the middle
-  // of typing. Read-only pages (History, Bookings, Leads) refresh
-  // silently in the background instead.
-  setInterval(()=>{
-    if(!currentClientId) return;
-    const isEditingTemplates = currentPage==='sms' && smsSubTab==='templates';
-    const isEditingSequence  = currentPage==='email' && emailSubTab==='builder';
-    const isEditingSettings  = currentPage==='settings';
-    if(isEditingTemplates || isEditingSequence || isEditingSettings) return; // skip entirely — never overwrite live edits
-    refreshCurrentPage(true); // true = silent, no loading wipe
-  },30000);
-</script>
 </body>
 </html>
