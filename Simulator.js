@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { getClientSettings } = require('./leads');
 
 // --------------------------------------------------------
 // DEMO / SIMULATOR SERVICE
@@ -80,11 +81,20 @@ async function createRetellWebCall(lead) {
     throw new Error('RETELL_API_KEY_1 / RETELL_AGENT_ID_1 not configured — demo web call unavailable');
   }
 
+  // FIX: business_name was hardcoded to a static env-var fallback here,
+  // completely ignoring which client was actually selected in the
+  // dashboard when "Inject Lead" was clicked — every demo call said the
+  // same name no matter the client. getClientSettings() already exists
+  // and does the right fallback (business_name, then name, then null);
+  // it just wasn't being called from the demo call path.
+  const clientSettings = await getClientSettings(lead.client_id);
+  const businessName = clientSettings.businessName || process.env.DEMO_BUSINESS_NAME || 'BotCipher Home Services';
+
   const response = await axios.post(
     'https://api.retellai.com/v2/create-web-call',
     {
       agent_id: agentId,
-      retell_llm_dynamic_variables: buildReceptionistVariables(lead),
+      retell_llm_dynamic_variables: buildReceptionistVariables(lead, businessName),
     },
     {
       headers: {
@@ -107,7 +117,7 @@ async function createRetellWebCall(lead) {
 // per-demo without touching code — set sensible defaults via env vars in
 // Railway (see DEMO_BUSINESS_* below), or fall back to generic values.
 // --------------------------------------------------------
-function buildReceptionistVariables(lead) {
+function buildReceptionistVariables(lead, businessName) {
   const fmt = (d) => d.toISOString().slice(0, 10); // YYYY-MM-DD
   const today = new Date();
 
@@ -123,7 +133,7 @@ function buildReceptionistVariables(lead) {
 
   return {
     agent_name: process.env.DEMO_AGENT_NAME || 'Ava',
-    business_name: process.env.DEMO_BUSINESS_NAME || 'BotCipher Home Services',
+    business_name: businessName || process.env.DEMO_BUSINESS_NAME || 'BotCipher Home Services',
     industry: process.env.DEMO_INDUSTRY || 'home services',
     business_phone: process.env.DEMO_BUSINESS_PHONE || '+1 (555) 010-0000',
     business_email: process.env.DEMO_BUSINESS_EMAIL || 'hello@botcipher.demo',
@@ -131,7 +141,7 @@ function buildReceptionistVariables(lead) {
     working_days: process.env.DEMO_WORKING_DAYS || 'Monday through Saturday',
     emergency_keywords: process.env.DEMO_EMERGENCY_KEYWORDS || 'flood, leak, no heat, gas smell, burst pipe',
     emergency_callback_minutes: process.env.DEMO_EMERGENCY_CALLBACK_MINUTES || '15',
-    tenant_id: process.env.DEMO_TENANT_ID || 'demo-tenant',
+    tenant_id: lead.client_id || process.env.DEMO_TENANT_ID || 'demo-tenant',
 
     current_date: today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
     day_of_week: today.toLocaleDateString('en-US', { weekday: 'long' }),
