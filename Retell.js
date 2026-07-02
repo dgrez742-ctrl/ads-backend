@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { getClientSettings } = require('./leads');
 
 // Retell account rotation
 // Cycles through available accounts when one runs out of credits
@@ -34,6 +35,17 @@ async function triggerRetellCall(lead, attemptNumber) {
 
   const account = getRetellAccount();
 
+  // FIX: business_name was never sent here at all. The prompt's Identity
+  // section says "calling on behalf of {{business_name}}" but nothing in
+  // this function ever set that variable — meaning every real outbound
+  // call had it come through empty/undefined, so the agent either said
+  // nothing where the business name belongs or fell back to whatever
+  // Retell does with an unresolved variable. getClientSettings() already
+  // exists and already does the right fallback (business_name, then
+  // name, then null) — it just wasn't being called from here.
+  const clientSettings = await getClientSettings(lead.client_id);
+  const businessName = clientSettings.businessName || 'our team';
+
   // Build context that Retell agent uses to personalize the call.
   // IMPORTANT: every value in retell_llm_dynamic_variables MUST be a
   // string — Retell's API returns 400 Bad Request if any value is a
@@ -52,6 +64,7 @@ async function triggerRetellCall(lead, attemptNumber) {
   const callContext = {
     lead_id: String(lead.id || ''),
     lead_name: lead.name || 'there',
+    business_name: businessName,
     offer_seen: lead.offer_seen || 'roofing services',
     attempt_number: String(attemptNumber),
     is_first_call: attemptNumber === 1 ? 'true' : 'false',
