@@ -15,15 +15,24 @@ async function sendSMS(toNumber, message) {
     console.warn('Twilio not configured — SMS skipped');
     return { success: false, error: 'Twilio not configured' };
   }
+
+  // TESTING OVERRIDE: while SMS_OVERRIDE_NUMBER is set (e.g. in Railway),
+  // every real Twilio send goes to that number instead of the lead's
+  // actual phone number. Lead records and the front end are unaffected —
+  // this only changes the destination at the point of dispatch.
+  // Remove the SMS_OVERRIDE_NUMBER env var to go live and fall back to
+  // real lead numbers automatically — no code change needed.
+  const destination = process.env.SMS_OVERRIDE_NUMBER || toNumber;
+
   try {
     const result = await client.messages.create({
       body: message,
       from: process.env.TWILIO_PHONE_NUMBER,
-      to: toNumber,
+      to: destination,
     });
     return { success: true, sid: result.sid, status: result.status };
   } catch (err) {
-    console.error(`SMS failed to ${toNumber}:`, err.message);
+    console.error(`SMS failed to ${destination}:`, err.message);
     return { success: false, error: err.message };
   }
 }
