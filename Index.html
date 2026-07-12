@@ -581,10 +581,7 @@
       <div class="fg"><label>Phone</label><input id="iPhone" placeholder="+1234567890"/></div>
       <div class="fg"><label>Email</label><input id="iEmail" placeholder="john@example.com"/></div>
       <div class="fg"><label>Offer Seen</label><input id="iOffer" placeholder="Free roofing inspection"/></div>
-      <div class="fg" style="display:flex;align-items:center;gap:8px;flex-direction:row;">
-        <input type="checkbox" id="iDemo" style="width:auto;" checked/>
-        <label for="iDemo" style="margin:0;font-size:12px;color:var(--muted);">Demo Lead (rings the phone simulator, never dials a real number)</label>
-      </div>
+      <div class="settings-hint">Demo mode for this client is controlled from Settings — it applies to every lead automatically, injected or real.</div>
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="closeModal('injectModal')">Cancel</button>
@@ -1147,6 +1144,19 @@
           <div class="fg"><label>Max attempts before moving to nurture</label><input id="setMaxAttempts" type="number" min="1" max="10" value="${settings.max_hot_attempts}"/></div>
         </div>
 
+        <div class="settings-section">
+          <h3>Demo Mode</h3>
+          <div class="fg" style="display:flex;align-items:center;gap:8px;flex-direction:row;">
+            <input type="checkbox" id="setDemoMode" style="width:auto;" ${settings.demo_mode ? 'checked' : ''}/>
+            <label for="setDemoMode" style="margin:0;font-size:13px;">Demo mode for this client</label>
+          </div>
+          <div class="settings-hint">While on, EVERY lead for this client — injected from the dashboard or arriving for real — rings the phone simulator instead of dialing a real number. Turn this off before going live.</div>
+          <div class="settings-row">
+            <div class="fg"><label>Ring delay (seconds)</label><input id="setDemoDelay" type="number" min="0" max="60" value="${settings.demo_call_delay_seconds}"/></div>
+          </div>
+          <div class="settings-hint">How long after a demo lead is created before the simulator actually rings.</div>
+        </div>
+
         <button class="btn primary" onclick="saveSettings()">Save Settings</button>
         <span id="settingsSavedMsg" style="margin-left:10px;font-size:12px;color:#1f6e3a;display:none;">Saved</span>
       `;
@@ -1163,6 +1173,8 @@
       sms_after_morning_time: document.getElementById('setAfterMorningTime').value,
       sms_after_evening_time: document.getElementById('setAfterEveningTime').value,
       max_hot_attempts: parseInt(document.getElementById('setMaxAttempts').value, 10),
+      demo_mode: document.getElementById('setDemoMode').checked,
+      demo_call_delay_seconds: parseInt(document.getElementById('setDemoDelay').value, 10),
     };
     const timezone = document.getElementById('setTimezone').value;
 
@@ -1456,8 +1468,7 @@
           name:document.getElementById('iName').value||'Test Lead',
           phone:document.getElementById('iPhone').value||'+1234567890',
           email:document.getElementById('iEmail').value||'test@example.com',
-          offer_seen:document.getElementById('iOffer').value||'Free roofing inspection',
-          demo:document.getElementById('iDemo').checked
+          offer_seen:document.getElementById('iOffer').value||'Free roofing inspection'
         })
       });
       closeModal('injectModal');
