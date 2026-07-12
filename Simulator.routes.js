@@ -16,8 +16,10 @@ const { sendSMS } = require('../services/twilio');
 // --------------------------------------------------------
 // GET /simulator/pending-call
 // Polled by the simulator frontend every ~1.5s.
-// Returns { lead, access_token, call_id } once the demo web call session
-// is ready, or { lead: null } if nothing is waiting.
+// Returns { lead, caller, access_token, call_id } once the demo web call
+// session is ready, or { lead: null } if nothing is waiting. `caller` is
+// the business's own name/number — what the ring screen should display —
+// kept separate from `lead`, which is internal session data only.
 // --------------------------------------------------------
 router.get('/pending-call', (req, res) => {
   const call = takePendingCall();
@@ -26,6 +28,7 @@ router.get('/pending-call', (req, res) => {
   }
   res.json({
     lead: call.lead,
+    caller: call.caller,
     access_token: call.access_token,
     call_id: call.call_id,
   });
