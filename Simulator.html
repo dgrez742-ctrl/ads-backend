@@ -145,7 +145,7 @@
   <div class="standby-led"></div>
   <div class="standby-clock" id="clockEl">--:--</div>
   <div class="standby-date" id="dateEl">—</div>
-  <div class="standby-note">Standing by. Leave this open — it'll ring automatically when a demo call is triggered.</div>
+  <div class="standby-note">Tap anywhere once to enable the ring sound, then leave this open — it'll ring automatically when a demo call is triggered.</div>
 </div>
 
 <div class="screen" id="incomingScreen">
@@ -235,6 +235,8 @@
   const API = 'https://ads-backend-production-d450.up.railway.app';
 
   let currentLead = null;
+  let currentCaller = null; // { name, number } — the business identity shown while ringing/in-call
+  let audioUnlocked = false;
   let pollTimer = null;
   let clockTimer = null;
   let callTimer = null;
@@ -295,7 +297,32 @@
   document.body.addEventListener('click', () => {
     requestFullscreen();
     requestWakeLock();
+    unlockAudio();
   }, { once:false });
+
+  // --------------------------------------------------------
+  // UNLOCK RINGTONE AUDIO
+  // Browsers block audio.play() with sound unless it happens inside (or
+  // shortly after) a real user gesture. navigator.vibrate() isn't gated
+  // the same way, which is why the phone could vibrate on an incoming
+  // call with zero ringtone sound and no visible error — tone.play() was
+  // being silently rejected every time. Play-then-immediately-pause on
+  // the very first tap registers the gesture with the browser so later
+  // programmatic play() calls (when a real call comes in) are allowed.
+  // --------------------------------------------------------
+  function unlockAudio(){
+    if(audioUnlocked) return;
+    const tone = document.getElementById('ringtone');
+    tone.volume = 1;
+    const p = tone.play();
+    if(p && p.then){
+      p.then(() => {
+        tone.pause();
+        tone.currentTime = 0;
+        audioUnlocked = true;
+      }).catch(() => { /* still blocked — will retry unlock on next tap */ });
+    }
+  }
 
   // --------------------------------------------------------
   // SCREEN SWITCHING
@@ -330,21 +357,26 @@
   // --------------------------------------------------------
   function triggerIncomingCall(data){
     currentLead = data.lead;
+    currentCaller = data.caller || {};
     closeAudioGate(); // hard-mute any media element before anything else, regardless of prior clicks
 
-    const initial = (currentLead.name || '?').charAt(0).toUpperCase();
+    // Ring screen shows the BUSINESS's identity (the caller), not the
+    // lead's — this simulates the business's AI agent calling the lead.
+    const callerName = currentCaller.name || 'Unknown';
+    const initial = callerName.charAt(0).toUpperCase();
     document.getElementById('icPhoto').textContent = initial;
-    document.getElementById('icName').textContent = currentLead.name || 'Unknown';
-    document.getElementById('icNumber').textContent = currentLead.phone || '';
+    document.getElementById('icName').textContent = callerName;
+    document.getElementById('icNumber').textContent = currentCaller.number || '';
     document.getElementById('icSubLabel').textContent = 'Mobile';
 
     showScreen('incomingScreen');
     requestFullscreen();
     requestWakeLock();
+    unlockAudio(); // in case this is genuinely the first interaction on the page
 
     const tone = document.getElementById('ringtone');
     tone.currentTime = 0;
-    tone.play().catch(()=>{});
+    tone.play().catch((err) => console.error('Ringtone play() blocked:', err));
 
     if(navigator.vibrate) navigator.vibrate([500,300,500,300,500]);
 
@@ -477,8 +509,9 @@
     if(navigator.vibrate) navigator.vibrate(0);
     openAudioGate(); // the ONLY place this is ever called — same invariant as mic unmute below
 
-    document.getElementById('callPhoto').textContent = (currentLead.name||'?').charAt(0).toUpperCase();
-    document.getElementById('callName').textContent = currentLead.name || 'Unknown';
+    const callerName = (currentCaller && currentCaller.name) || 'Unknown';
+    document.getElementById('callPhoto').textContent = callerName.charAt(0).toUpperCase();
+    document.getElementById('callName').textContent = callerName;
     document.getElementById('callStatusTxt').textContent = 'Connected';
     showScreen('incallScreen');
 
@@ -608,6 +641,7 @@
     setTimeout(() => {
       showScreen('idleScreen');
       currentLead = null;
+      currentCaller = null;
       retellClient = null;
       retellConnected = false;
       callEndedHandled = false;
