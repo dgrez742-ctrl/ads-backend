@@ -12,7 +12,7 @@ const { getClientSettings } = require('./leads');
 // In-memory queue — single demo session at a time is enough for live demos.
 // Not persisted; resets if the server restarts. That's intentional — this is
 // demo-only state, not real lead data (real lead data still lives in Supabase).
-let pendingCall = null;   // { lead, access_token, call_id, queued_at } — set only once Retell confirms the session exists
+let pendingCall = null;   // { lead, caller, access_token, call_id, queued_at } — set only once Retell confirms the session exists
 let activeCall = null;    // the call currently answered/in-progress (for logging only)
 let callStatus = 'idle';  // idle | connecting | ringing | answered | declined | ended | failed
                           // exposed via getCallStatus() so the dashboard's calling bar
@@ -20,25 +20,39 @@ let callStatus = 'idle';  // idle | connecting | ringing | answered | declined |
 
 // --------------------------------------------------------
 // Queue a demo call — called by /webhook/meta and /call when demo/is_demo.
-// No artificial delay: creates the Retell web call immediately, and only
-// once Retell actually confirms the session exists does this become
-// "pending" for the simulator to pick up on its next poll. That poll
-// interval (~1.5s) is the only "ring delay" — it's a side effect of
-// genuine readiness, not a guess.
+// Waits demo_call_delay_seconds (Settings page, default 5s) before creating
+// the Retell web call, then the simulator picks it up on its next poll
+// (~1.5s interval) once Retell confirms the session exists.
 // --------------------------------------------------------
 function queueDemoWebCall(lead) {
   callStatus = 'connecting';
-  console.log(`Demo call queued for lead ${lead.id} — creating Retell web call session...`);
+  console.log(`Demo call queued for lead ${lead.id} — waiting before creating Retell web call session...`);
 
   (async () => {
     try {
-      const webCall = await createRetellWebCall(lead);
+      const clientSettings = await getClientSettings(lead.client_id);
+      const delaySeconds = clientSettings.settings.demo_call_delay_seconds ?? 5;
+
+      if (delaySeconds > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delaySeconds * 1000));
+      }
+
+      console.log(`Demo call delay elapsed for lead ${lead.id} — creating Retell web call session...`);
+      const webCall = await createRetellWebCall(lead, clientSettings);
       pendingCall = {
         lead: {
           id: lead.id,
           name: lead.name,
           phone: lead.phone,
           offer_seen: lead.offer_seen,
+        },
+        // What the ring screen actually displays — the BUSINESS's identity,
+        // since this simulates the business's AI agent calling the lead.
+        // The lead's own name/phone are for internal session data only and
+        // are never shown as the caller.
+        caller: {
+          name: webCall.businessName,
+          number: webCall.businessPhone,
         },
         access_token: webCall.access_token,
         call_id: webCall.call_id,
@@ -73,7 +87,7 @@ function queueDemoWebCall(lead) {
 // Retell's API returns 400 Bad Request if any value is a boolean, number,
 // or other type. Compute date helpers as plain strings too.
 // --------------------------------------------------------
-async function createRetellWebCall(lead) {
+async function createRetellWebCall(lead, preloadedSettings) {
   const apiKey = process.env.RETELL_API_KEY_1;
   const agentId = process.env.RETELL_AGENT_ID_1;
 
@@ -87,8 +101,9 @@ async function createRetellWebCall(lead) {
   // same name no matter the client. getClientSettings() already exists
   // and does the right fallback (business_name, then name, then null);
   // it just wasn't being called from the demo call path.
-  const clientSettings = await getClientSettings(lead.client_id);
+  const clientSettings = preloadedSettings || await getClientSettings(lead.client_id);
   const businessName = clientSettings.businessName || process.env.DEMO_BUSINESS_NAME || 'BotCipher Home Services';
+  const businessPhone = clientSettings.businessPhone || process.env.DEMO_BUSINESS_PHONE || '+1 (555) 010-0000';
 
   const response = await axios.post(
     'https://api.retellai.com/v2/create-web-call',
@@ -107,6 +122,8 @@ async function createRetellWebCall(lead) {
   return {
     access_token: response.data.access_token,
     call_id: response.data.call_id,
+    businessName,
+    businessPhone,
   };
 }
 
