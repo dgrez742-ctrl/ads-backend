@@ -14,6 +14,15 @@ const DEFAULT_SETTINGS = {
   sms_after_evening_time: '10:30',  // evening-bucket calls get next-morning SMS at this time
   max_hot_attempts: 4,
   nurture_intervals_days: [7, 7, 7, 14, 30, 30],
+
+  // DEMO MODE — replaces the old per-injection "demo" checkbox. When true,
+  // EVERY lead created for this client (manually injected OR arriving for
+  // real via /webhook/meta) goes through the demo web-call simulator path
+  // instead of dialing a real phone. Flip off before going live for real.
+  demo_mode: false,
+  // How long the simulator waits after a lead is queued before it actually
+  // rings — gives you time to get the phone screen open/visible.
+  demo_call_delay_seconds: 5,
 };
 
 function mergeSettings(clientSettings) {
