@@ -202,18 +202,19 @@ const { mergeSettings } = require('./timezone');
 async function getClientSettings(clientId) {
   const { data, error } = await supabase
     .from('ldm_clients')
-    .select('timezone, followup_settings, business_name, name')
+    .select('timezone, followup_settings, business_name, name, phone')
     .eq('id', clientId)
     .single();
 
   if (error || !data) {
-    return { timezone: 'America/New_York', settings: mergeSettings({}), businessName: null };
+    return { timezone: 'America/New_York', settings: mergeSettings({}), businessName: null, businessPhone: null };
   }
 
   return {
     timezone: data.timezone || 'America/New_York',
     settings: mergeSettings(data.followup_settings),
     businessName: data.business_name || data.name || null,
+    businessPhone: data.phone || null,
   };
 }
 
