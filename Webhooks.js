@@ -16,10 +16,12 @@ const { computeSmsSendTime } = require('../services/timezone');
 // POST /webhook/meta
 // Receives lead data from Meta via n8n or direct webhook.
 //
-// DEMO MODE: if body.demo === true (e.g. from the dashboard's "Inject Lead"
-// button), this NEVER dials a real phone. Instead it queues a Retell WEB
-// CALL for the phone simulator, on a fixed delay. Real Meta leads never
-// set this flag, so production behavior is unchanged.
+// DEMO MODE: driven entirely by the client's own demo_mode setting
+// (Settings page), NOT a per-request flag. While demo_mode is on for a
+// client, EVERY lead for that client — manually injected from the
+// dashboard OR arriving for real through this same webhook — is queued
+// as a Retell WEB CALL for the phone simulator instead of dialing a real
+// phone. Flip demo_mode off in Settings before going live for real leads.
 // --------------------------------------------------------
 router.post('/meta', async (req, res) => {
   try {
@@ -27,7 +29,8 @@ router.post('/meta', async (req, res) => {
     console.log('Meta webhook received:', JSON.stringify(body));
 
     // Extract lead fields — Meta sends these from the lead form
-    const isDemo = body.demo === true;
+    const { settings } = await getClientSettings(body.client_id);
+    const isDemo = settings.demo_mode === true;
 
     const leadData = {
       client_id: body.client_id,         // passed by n8n based on which client's form
