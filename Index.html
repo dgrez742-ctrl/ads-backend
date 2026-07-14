@@ -590,7 +590,11 @@
 </div>
 
 <script>
-  const API = 'https://ads-backend-production-d450.up.railway.app';
+  // Relative, not hardcoded: this page is always served by the same
+  // backend that answers these API calls (see Index.js's res.sendFile),
+  // so pointing at '' (same origin) means this never needs updating
+  // again on a host migration — no matter where this gets deployed.
+  const API = '';
 
   let currentClientId = null;
   let currentClientList = [];
