@@ -18,6 +18,8 @@ const {
   getClientSettings,
   updateClientSettings,
   getBookingEventsForClient,
+  updateBookingEvent,
+  deleteBookingEvent,
   getSmsTemplate,
   getSmsTemplates,
   saveSmsTemplate,
@@ -157,6 +159,28 @@ app.patch('/activity/:id', async (req, res) => {
 app.delete('/activity/:id', async (req, res) => {
   try {
     await deleteActivity(req.params.id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// EDIT / DELETE a single booking event row — powers the three-dot menu
+// on the Bookings page. Separate table (ldm_booking_events) from the
+// generic activity log, so these are their own routes.
+app.patch('/bookings/:id', async (req, res) => {
+  try {
+    const { event_type, appointment_date, notes } = req.body;
+    const updated = await updateBookingEvent(req.params.id, { event_type, appointment_date, notes });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/bookings/:id', async (req, res) => {
+  try {
+    await deleteBookingEvent(req.params.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
