@@ -389,6 +389,34 @@ async function getBookingEventsForClient(clientId) {
   return (data || []).map(row => ({ ...row, lead: leadMap[row.lead_id] || null }));
 }
 
+// Edit/delete a single booking event row — used by the three-dot menu on
+// the Bookings page.
+async function updateBookingEvent(eventId, { event_type, appointment_date, notes }) {
+  const patch = {};
+  if (event_type !== undefined) patch.event_type = event_type;
+  if (appointment_date !== undefined) patch.appointment_date = appointment_date || null;
+  if (notes !== undefined) patch.notes = notes;
+
+  const { data, error } = await supabase
+    .from('ldm_booking_events')
+    .update(patch)
+    .eq('id', eventId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function deleteBookingEvent(eventId) {
+  const { error } = await supabase
+    .from('ldm_booking_events')
+    .delete()
+    .eq('id', eventId);
+
+  if (error) throw error;
+}
+
 // --------------------------------------------------------
 // SMS TEMPLATES — editable per client, replacing hardcoded strings in
 // Twilio.js. resolveTemplate() fills in {{first_name}}/{{offer}}/
@@ -709,6 +737,8 @@ module.exports = {
   markScheduledSmsSkipped,
   recordBookingEvent,
   getBookingEventsForClient,
+  updateBookingEvent,
+  deleteBookingEvent,
   resolveTemplate,
   getSmsTemplates,
   getSmsTemplate,
