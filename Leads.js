@@ -99,6 +99,38 @@ async function logActivity(leadId, activityType, outcome, notes = '', extra = {}
   if (error) throw error;
 }
 
+// Edit an existing activity row — used by the three-dot menu on each
+// timeline event. Only activity_type, outcome, and notes are editable;
+// system fields (transcript, call_summary, retell_call_id, timestamps)
+// are left alone so this can't be used to rewrite what Retell/Twilio
+// actually reported.
+async function updateActivity(activityId, { activity_type, outcome, notes }) {
+  const patch = {};
+  if (activity_type !== undefined) patch.activity_type = activity_type;
+  if (outcome !== undefined) patch.outcome = outcome;
+  if (notes !== undefined) patch.notes = notes;
+
+  const { data, error } = await supabase
+    .from('ldm_contact_activity')
+    .update(patch)
+    .eq('id', activityId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// Delete a single activity row — used by the three-dot menu.
+async function deleteActivity(activityId) {
+  const { error } = await supabase
+    .from('ldm_contact_activity')
+    .delete()
+    .eq('id', activityId);
+
+  if (error) throw error;
+}
+
 // Get count of contact attempts for a lead (call activity rows)
 async function getAttemptCount(leadId) {
   const { data, error } = await supabase
@@ -659,6 +691,8 @@ module.exports = {
   setLastAction,
   incrementAttemptCount,
   logActivity,
+  updateActivity,
+  deleteActivity,
   getAttemptCount,
   getLeadsForFollowUp,
   getStalledLeads,
