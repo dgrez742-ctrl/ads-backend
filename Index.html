@@ -620,6 +620,29 @@
   </div>
 </div>
 
+<!-- EDIT BOOKING MODAL -->
+<div class="modal-overlay" id="editBookingModal">
+  <div class="modal">
+    <div class="modal-head"><h2>Edit Booking Event</h2><button class="panel-close" onclick="closeModal('editBookingModal')">×</button></div>
+    <div class="modal-body">
+      <div class="fg">
+        <label>Event Type</label>
+        <select id="ebType">
+          <option value="booked">booked</option>
+          <option value="rescheduled">rescheduled</option>
+          <option value="cancelled">cancelled</option>
+        </select>
+      </div>
+      <div class="fg"><label>Appointment Date</label><input id="ebDate" type="date"/></div>
+      <div class="fg"><label>Notes</label><input id="ebNotes" placeholder="Notes for this booking"/></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('editBookingModal')">Cancel</button>
+      <button class="btn primary" onclick="saveBookingEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // Relative, not hardcoded: this page is always served by the same
   // backend that answers these API calls (see Index.js's res.sendFile),
@@ -896,15 +919,22 @@
       }
 
       if(sent && sent.length>0){
+        window.currentActivities = window.currentActivities || {};
+        sent.forEach(r => { window.currentActivities[r.id] = r; });
         html += `<div class="section-label">Sent</div>`;
         html += sent.map(r=>`
-          <div class="lead-card" style="cursor:default;">
+          <div class="lead-card" style="cursor:default;position:relative;">
             <div class="lead-row1">
               <div class="lead-name-wrap">
                 <div class="lead-name">${escapeHtml(r.lead?.name||'Unknown lead')}</div>
                 <div class="lead-phone">${escapeHtml(r.lead?.phone||'')}</div>
               </div>
               <span class="badge ${r.outcome==='sent'?'contacted':'dead'}">${r.outcome}</span>
+              <button class="act-menu-btn" onclick="toggleActMenu(event, ${r.id})" title="More">⋯</button>
+              <div class="act-menu-dropdown" id="actMenu_${r.id}">
+                <button onclick="openEditEvent(${r.id}, 'sms')">Edit</button>
+                <button class="danger" onclick="deleteEvent(${r.id}, 'sms')">Delete</button>
+              </div>
             </div>
             <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
               <div class="lead-last" style="white-space:normal;">${escapeHtml(r.notes||'')}</div>
@@ -1068,15 +1098,22 @@
       }
 
       if(sent && sent.length>0){
+        window.currentActivities = window.currentActivities || {};
+        sent.forEach(r => { window.currentActivities[r.id] = r; });
         html += `<div class="section-label">Sent</div>`;
         html += sent.map(r=>`
-          <div class="lead-card" style="cursor:default;">
+          <div class="lead-card" style="cursor:default;position:relative;">
             <div class="lead-row1">
               <div class="lead-name-wrap">
                 <div class="lead-name">${escapeHtml(r.lead?.name||'Unknown lead')}</div>
                 <div class="lead-phone">${escapeHtml(r.lead?.email||'')}</div>
               </div>
               <span class="badge ${r.outcome==='sent'?'contacted':'dead'}">${r.outcome}</span>
+              <button class="act-menu-btn" onclick="toggleActMenu(event, ${r.id})" title="More">⋯</button>
+              <div class="act-menu-dropdown" id="actMenu_${r.id}">
+                <button onclick="openEditEvent(${r.id}, 'email')">Edit</button>
+                <button class="danger" onclick="deleteEvent(${r.id}, 'email')">Delete</button>
+              </div>
             </div>
             <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
               <div class="lead-last" style="white-space:normal;">${escapeHtml(r.notes||'')}</div>
@@ -1106,14 +1143,21 @@
         return;
       }
       const eventBadge={booked:'booked',rescheduled:'attempted',cancelled:'dead'};
+      window.currentBookings = {};
+      rows.forEach(r => { window.currentBookings[r.id] = r; });
       wrap.innerHTML=rows.map(r=>`
-        <div class="lead-card" style="cursor:default;">
+        <div class="lead-card" style="cursor:default;position:relative;">
           <div class="lead-row1">
             <div class="lead-name-wrap">
               <div class="lead-name">${r.lead?.name||'Unknown lead'}</div>
               <div class="lead-phone">${r.lead?.phone||''}</div>
             </div>
             <span class="badge ${eventBadge[r.event_type]||'new'}">${r.event_type}</span>
+            <button class="act-menu-btn" onclick="toggleActMenu(event, ${r.id})" title="More">⋯</button>
+            <div class="act-menu-dropdown" id="actMenu_${r.id}">
+              <button onclick="openEditBooking(${r.id})">Edit</button>
+              <button class="danger" onclick="deleteBooking(${r.id})">Delete</button>
+            </div>
           </div>
           <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
             <div class="lead-last" style="white-space:normal;">
@@ -1524,6 +1568,7 @@
   // THREE-DOT EVENT MENU (edit/delete on each activity timeline row)
   // --------------------------------------------------------
   let currentEditEventId = null;
+  let currentEditEventContext = 'lead';
 
   function toggleActMenu(evt, activityId){
     evt.stopPropagation();
@@ -1536,10 +1581,11 @@
     document.querySelectorAll('.act-menu-dropdown.open').forEach(d => d.classList.remove('open'));
   });
 
-  function openEditEvent(activityId){
+  function openEditEvent(activityId, context){
     const a = (window.currentActivities||{})[activityId];
     if(!a) return;
     currentEditEventId = activityId;
+    currentEditEventContext = context || 'lead';
     document.getElementById('eeType').value = a.activity_type || 'call';
     document.getElementById('eeOutcome').value = a.outcome || '';
     document.getElementById('eeNotes').value = a.notes || '';
@@ -1558,18 +1604,71 @@
         })
       });
       closeModal('editEventModal');
-      if(currentLeadId) openLead(currentLeadId);
+      refreshAfterEventChange(currentEditEventContext);
     }catch(e){
       console.error(e);
       alert("Couldn't save that change — try again.");
     }
   }
 
-  async function deleteEvent(activityId){
+  async function deleteEvent(activityId, context){
     if(!confirm('Delete this event? This cannot be undone.')) return;
     try{
       await api(`/activity/${activityId}`, { method:'DELETE' });
-      if(currentLeadId) openLead(currentLeadId);
+      refreshAfterEventChange(context || 'lead');
+    }catch(e){
+      console.error(e);
+      alert("Couldn't delete that event — try again.");
+    }
+  }
+
+  function refreshAfterEventChange(context){
+    if(context==='sms') loadSmsHistory(true);
+    else if(context==='email') loadEmailHistory(true);
+    else if(currentLeadId) openLead(currentLeadId);
+  }
+
+  // --------------------------------------------------------
+  // BOOKINGS three-dot menu — separate table (ldm_booking_events), so
+  // its own modal/save/delete hitting /bookings/:id instead of
+  // /activity/:id.
+  // --------------------------------------------------------
+  let currentEditBookingId = null;
+
+  function openEditBooking(bookingId){
+    const b = (window.currentBookings||{})[bookingId];
+    if(!b) return;
+    currentEditBookingId = bookingId;
+    document.getElementById('ebType').value = b.event_type || 'booked';
+    document.getElementById('ebDate').value = b.appointment_date ? b.appointment_date.slice(0,10) : '';
+    document.getElementById('ebNotes').value = b.notes || '';
+    document.getElementById('editBookingModal').classList.add('open');
+  }
+
+  async function saveBookingEdit(){
+    if(!currentEditBookingId) return;
+    try{
+      await api(`/bookings/${currentEditBookingId}`, {
+        method:'PATCH',
+        body: JSON.stringify({
+          event_type: document.getElementById('ebType').value,
+          appointment_date: document.getElementById('ebDate').value || null,
+          notes: document.getElementById('ebNotes').value,
+        })
+      });
+      closeModal('editBookingModal');
+      loadBookingsPage(true);
+    }catch(e){
+      console.error(e);
+      alert("Couldn't save that change — try again.");
+    }
+  }
+
+  async function deleteBooking(bookingId){
+    if(!confirm('Delete this booking event? This cannot be undone.')) return;
+    try{
+      await api(`/bookings/${bookingId}`, { method:'DELETE' });
+      loadBookingsPage(true);
     }catch(e){
       console.error(e);
       alert("Couldn't delete that event — try again.");
