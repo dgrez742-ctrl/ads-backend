@@ -929,11 +929,13 @@
                 <div class="lead-name">${escapeHtml(r.lead?.name||'Unknown lead')}</div>
                 <div class="lead-phone">${escapeHtml(r.lead?.phone||'')}</div>
               </div>
-              <span class="badge ${r.outcome==='sent'?'contacted':'dead'}">${r.outcome}</span>
-              <button class="act-menu-btn" onclick="toggleActMenu(event, ${r.id})" title="More">⋯</button>
-              <div class="act-menu-dropdown" id="actMenu_${r.id}">
-                <button onclick="openEditEvent(${r.id}, 'sms')">Edit</button>
-                <button class="danger" onclick="deleteEvent(${r.id}, 'sms')">Delete</button>
+              <div style="display:flex;align-items:center;gap:6px;position:relative;">
+                <span class="badge ${r.outcome==='sent'?'contacted':'dead'}">${r.outcome}</span>
+                <button class="act-menu-btn" onclick="toggleActMenu(event, '${r.id}')" title="More">⋯</button>
+                <div class="act-menu-dropdown" id="actMenu_${r.id}">
+                  <button onclick="openEditEvent('${r.id}', 'sms')">Edit</button>
+                  <button class="danger" onclick="deleteEvent('${r.id}', 'sms')">Delete</button>
+                </div>
               </div>
             </div>
             <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
@@ -1108,11 +1110,13 @@
                 <div class="lead-name">${escapeHtml(r.lead?.name||'Unknown lead')}</div>
                 <div class="lead-phone">${escapeHtml(r.lead?.email||'')}</div>
               </div>
-              <span class="badge ${r.outcome==='sent'?'contacted':'dead'}">${r.outcome}</span>
-              <button class="act-menu-btn" onclick="toggleActMenu(event, ${r.id})" title="More">⋯</button>
-              <div class="act-menu-dropdown" id="actMenu_${r.id}">
-                <button onclick="openEditEvent(${r.id}, 'email')">Edit</button>
-                <button class="danger" onclick="deleteEvent(${r.id}, 'email')">Delete</button>
+              <div style="display:flex;align-items:center;gap:6px;position:relative;">
+                <span class="badge ${r.outcome==='sent'?'contacted':'dead'}">${r.outcome}</span>
+                <button class="act-menu-btn" onclick="toggleActMenu(event, '${r.id}')" title="More">⋯</button>
+                <div class="act-menu-dropdown" id="actMenu_${r.id}">
+                  <button onclick="openEditEvent('${r.id}', 'email')">Edit</button>
+                  <button class="danger" onclick="deleteEvent('${r.id}', 'email')">Delete</button>
+                </div>
               </div>
             </div>
             <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
@@ -1152,11 +1156,13 @@
               <div class="lead-name">${r.lead?.name||'Unknown lead'}</div>
               <div class="lead-phone">${r.lead?.phone||''}</div>
             </div>
-            <span class="badge ${eventBadge[r.event_type]||'new'}">${r.event_type}</span>
-            <button class="act-menu-btn" onclick="toggleActMenu(event, ${r.id})" title="More">⋯</button>
-            <div class="act-menu-dropdown" id="actMenu_${r.id}">
-              <button onclick="openEditBooking(${r.id})">Edit</button>
-              <button class="danger" onclick="deleteBooking(${r.id})">Delete</button>
+            <div style="display:flex;align-items:center;gap:6px;position:relative;">
+              <span class="badge ${eventBadge[r.event_type]||'new'}">${r.event_type}</span>
+              <button class="act-menu-btn" onclick="toggleActMenu(event, '${r.id}')" title="More">⋯</button>
+              <div class="act-menu-dropdown" id="actMenu_${r.id}">
+                <button onclick="openEditBooking('${r.id}')">Edit</button>
+                <button class="danger" onclick="deleteBooking('${r.id}')">Delete</button>
+              </div>
             </div>
           </div>
           <div class="lead-row2" style="flex-direction:column;align-items:flex-start;gap:4px;">
@@ -1321,10 +1327,10 @@
               <span class="act-out"><strong>${a.outcome}</strong>${a.notes?', '+escapeHtml(a.notes):''}${sentimentTag}</span>
               ${durationTag}
               <span class="act-time">${timeAgo(a.created_at)}</span>
-              <button class="act-menu-btn" onclick="toggleActMenu(event, ${a.id})" title="More">⋯</button>
+              <button class="act-menu-btn" onclick="toggleActMenu(event, '${a.id}')" title="More">⋯</button>
               <div class="act-menu-dropdown" id="actMenu_${a.id}">
-                <button onclick="openEditEvent(${a.id})">Edit</button>
-                <button class="danger" onclick="deleteEvent(${a.id})">Delete</button>
+                <button onclick="openEditEvent('${a.id}')">Edit</button>
+                <button class="danger" onclick="deleteEvent('${a.id}')">Delete</button>
               </div>
             </div>
             ${summaryLine}
