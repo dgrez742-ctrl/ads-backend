@@ -12,6 +12,8 @@ const {
   setLastAction,
   incrementAttemptCount,
   logActivity,
+  updateActivity,
+  deleteActivity,
   moveToNurture,
   getClientSettings,
   updateClientSettings,
@@ -134,6 +136,28 @@ app.get('/leads/:id/activity', async (req, res) => {
       .order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// EDIT / DELETE a single activity/event row — powers the three-dot menu
+// on each timeline event. Editable fields are type/outcome/notes only;
+// see updateActivity() for why system-reported fields stay locked.
+app.patch('/activity/:id', async (req, res) => {
+  try {
+    const { activity_type, outcome, notes } = req.body;
+    const updated = await updateActivity(req.params.id, { activity_type, outcome, notes });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/activity/:id', async (req, res) => {
+  try {
+    await deleteActivity(req.params.id);
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
